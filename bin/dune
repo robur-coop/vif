@@ -1,0 +1,6 @@
+(executable
+ (name vif)
+ (public_name vif)
+ (flags
+  (:standard -w -18))
+ (libraries logs.fmt fmt.tty vif.top))

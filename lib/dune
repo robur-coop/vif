@@ -1,0 +1,27 @@
+(library
+ (name vif_top)
+ (modules vif_top)
+ (public_name vif.top)
+ (modes native)
+ (libraries
+  vif.meta
+  compiler-libs
+  compiler-libs.common
+  compiler-libs.native-toplevel))
+
+(ocamllex vif_meta_lexer)
+
+(library
+ (name vif_meta)
+ (modules vif_meta vif_meta_lexer objinfo digest modname unitname)
+ (public_name vif.meta)
+ (modes native)
+ (libraries
+  compiler-libs
+  compiler-libs.common
+  fmt
+  bos
+  logs
+  unix
+  fpath
+  cmdliner))

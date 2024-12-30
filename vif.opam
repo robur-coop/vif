@@ -1,0 +1,25 @@
+opam-version: "2.0"
+maintainer: "Robur <team@robur.coop>"
+authors: ["Robur <team@robur.coop>"]
+homepage: "https://github.com/robur-coop/vif"
+dev-repo: "git+https://github.com/robur-coop/vif.git"
+bug-reports: "https://github.com/robur-coop/vif/issues"
+license: "BSD-3-clause"
+
+depends: [
+  "ocaml" {>= "5.0.0"}
+  "dune" {>= "2.0.0"}
+  "fmt"
+  "bos"
+  "logs"
+  "unix"
+  "fpath"
+  "cmdliner"
+]
+conflicts: [ "result" {< "1.5"} ]
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build" "-p" name "-j" jobs]
+]
+
+synopsis: ""
