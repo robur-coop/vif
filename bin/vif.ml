@@ -21,8 +21,9 @@ let main =
     {ocaml|let v = 42;;|ocaml}
   ; {ocaml|let rec infinity () = infinity ();;|ocaml}
   ; {ocaml|print_endline "Hello World!";;|ocaml}
-  ; {ocaml|let a = Bool.to_int true;;|ocaml}
-  ; {ocaml|#show_dirs;;|ocaml}
+  ; {ocaml|let a = Bool.to_int true;;|ocaml}; {ocaml|#show_dirs;;|ocaml}
+  ; {ocaml|#directory "/home/dinosaure/.opam/5.2.0+ocamlnat/lib/ocaml/";;|ocaml}
+  ; {ocaml|#load "/home/dinosaure/.opam/5.2.0+ocamlnat/lib/ocaml/stdlib.cmxa";;|ocaml}
   ; {ocaml|#require "miou";;|ocaml}
   ; {ocaml|let fn () = print_endline "Hello from Miou!";;|ocaml}
   ; {ocaml|Miou.run fn;;|ocaml}

@@ -2,5 +2,5 @@
  (name vif)
  (public_name vif)
  (flags
-  (:standard -w -18))
+  (:standard -w -18 -linkall))
  (libraries logs.fmt fmt.tty vif.top))

@@ -2,10 +2,7 @@ let src = Logs.Src.create "vif.top"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type cfg = {
-    stdlib: Fpath.t
-  ; roots: Fpath.t list
-}
+type cfg = { stdlib: Fpath.t; roots: Fpath.t list }
 
 let errors = ref false
 
@@ -120,51 +117,61 @@ module Phrase = struct
     | _ -> false
 end
 
-let load cfg str = 
+let load cfg str =
   let ( let* ) = Result.bind in
   Log.debug (fun m -> m "load: %s" str);
   let* path = Vif_meta.Path.of_string str in
-  let* deps = Vif_meta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path in
+  let* deps =
+    Vif_meta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path
+  in
   let fn acc (_, path, descr) =
-    let path = match List.assoc_opt "directory" descr with
+    let path =
+      match List.assoc_opt "directory" descr with
       | Some (dir :: _) -> Fpath.(to_dir_path (path / dir))
-      | Some [] | None -> path in
+      | Some [] | None -> path
+    in
     match List.assoc_opt "plugin" descr with
     | Some (plugin :: _) -> Fpath.(path / plugin) :: acc
-    | Some [] | None -> acc in
+    | Some [] | None -> acc
+  in
   let artifacts = List.fold_left fn [] deps in
   let artifacts = List.rev artifacts in
-  Log.debug (fun m -> m "load: @[<hov>%a@]"
-    Fmt.(Dump.list Fpath.pp) artifacts);
+  Log.debug (fun m -> m "load: @[<hov>%a@]" Fmt.(Dump.list Fpath.pp) artifacts);
   Ok artifacts
 
 let load cfg str =
   match load cfg str with
   | Ok artifacts ->
-    let fn artifact =
-      let dir = Fpath.parent artifact in
-      Topdirs.dir_directory (Fpath.(to_string dir));
-      Topdirs.dir_load Fmt.stderr (Fpath.to_string artifact)
-    in
-    List.iter fn artifacts
-  | Error (`Msg msg) ->
-    Log.err (fun m -> m "Impossible to load %S: %s" str msg)
+      let fn artifact =
+        let dir = Fpath.parent artifact in
+        Topdirs.dir_directory Fpath.(to_string dir);
+        Topdirs.dir_load Fmt.stderr (Fpath.to_string artifact)
+      in
+      List.iter fn artifacts
+  | Error (`Msg msg) -> Log.err (fun m -> m "Impossible to load %S: %s" str msg)
 
 let init cfg =
+  let ppf = Fmt.stderr in
+  Sys.interactive := false;
   Clflags.native_code := true;
+  Clflags.debug := true;
   Topcommon.update_search_path_from_env ();
+  Compenv.readenv ppf Compenv.Before_args;
+  (* Clflags.add_arguments __LOC__ Option.list; *)
+  (* Compenv.parse_arguments ~current argv file_argument program; *)
+  (* Compmisc.read_clflags_from_env (); *)
+  (* - Toploop.prepare ppf () *)
   Topcommon.set_paths ();
-  Toploop.toplevel_env := Compmisc.initial_env ();
+  Toploop.initialize_toplevel_env ();
   let objs = !Compenv.first_objfiles in
-  List.iter (Topdirs.dir_load Fmt.stderr) objs;
+  List.iter (Topdirs.dir_load ppf) objs;
   Topcommon.run_hooks Topcommon.Startup;
   Compmisc.init_path ();
-  Sys.interactive := false;
-  (* Topdirs.dir_directory (Fpath.(to_string cfg.stdlib)); *)
+  (* Toploop.loop Format.std_formatter *)
+  Topcommon.run_hooks Topcommon.After_setup;
   Toploop.add_directive "require"
     (Toploop.Directive_string (load cfg))
-    { Toploop.section= "Vif loader"
-    ; doc= "Load a package" }
+    { Toploop.section= "Vif loader"; doc= "Load a package" }
 
 let config ~stdlib roots =
   let cfg = { stdlib; roots } in
