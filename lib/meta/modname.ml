@@ -30,7 +30,7 @@ let v str =
   match of_string str with Ok v -> v | Error (`Msg err) -> failwith err
 
 let pp ppf t = Format.pp_print_string ppf t
-let reflect ppf t = Fmt.pf ppf "(Modname.v %S)" t
+let reflect ppf t = Format.fprintf ppf "(Modname.v %S)" t
 let to_string v = v
 let compare = String.compare
 

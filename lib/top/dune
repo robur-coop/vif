@@ -1,0 +1,12 @@
+(library
+ (name vif_top)
+ (modules vif_top)
+ (public_name vif.top)
+ (modes native)
+ (wrapped false)
+ (libraries
+  vif.meta
+  compiler-libs
+  compiler-libs.common
+  compiler-libs.toplevel
+  compiler-libs.native-toplevel))

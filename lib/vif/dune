@@ -1,0 +1,4 @@
+(library
+ (name vif)
+ (public_name vif)
+ (libraries httpcats tyre))

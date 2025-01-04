@@ -39,10 +39,10 @@ val filepath : t -> string
 (** [filepath v] returns the {b filepath} of the given unit name. The file path
     is the one used to construct [v] with {!val:modulize}. *)
 
-val pp : t Fmt.t
-val pp_as_modname : t Fmt.t
-val pp_as_filepath : t Fmt.t
-val reflect : t Fmt.t
+val pp : Format.formatter -> t -> unit
+val pp_as_modname : Format.formatter -> t -> unit
+val pp_as_filepath : Format.formatter -> t -> unit
+val reflect : Format.formatter -> t -> unit
 
 val compare_as_modnames : t -> t -> int
 (** [compare_as_modnames a b] compares [a] and [b] from their modname's views.

@@ -2,7 +2,7 @@ let src = Logs.Src.create "uniq.info"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
+let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
 [@@@warning "-32"]
 
@@ -19,8 +19,8 @@ type t = {
 
 and elt =
   | Qualified of Modname.t * Digest.t
-  | Fully_qualified of Modname.t * Digest.t * Fpath.t
-  | Located of Modname.t * Fpath.t
+  | Fully_qualified of Modname.t * Digest.t * string
+  | Located of Modname.t * string
   | Named of Modname.t
 
 and 'a kind =
@@ -38,7 +38,7 @@ let equal a b =
 exception Inconsistency of Unitname.t * Modname.t * Digest.t * Digest.t
 
 let inconsistency location name crc crc' =
-  let unit = Unitname.modulize (Fpath.to_string location) in
+  let unit = Unitname.modulize location in
   raise (Inconsistency (unit, name, crc, crc'))
 
 let is_fully_resolved t =
@@ -70,7 +70,7 @@ let of_elt = function
   | Named m -> (m, None)
 
 let exports t = t.exports
-let location t = Fpath.v (Unitname.filepath t.name)
+let location t = Unitname.filepath t.name
 let intfs_imported t = List.map of_elt t.intfs
 let impls_imported t = List.map of_elt t.impls
 let modname t = Unitname.modname t.name
@@ -145,27 +145,24 @@ let elt_find modname lst =
     | Located _ -> [ (modname, None) ]
   with Not_found -> []
 
-open Bos
-open Rresult
-
 let to_elt (str, crc) =
   match crc with
   | Some crc -> Qualified (Modname.v str, crc)
   | None -> Named (Modname.v str)
 
 let info_of_cmi ~location ~version _ic =
-  match Cmt_format.read (Fpath.to_string location) with
-  | None, _ -> error_msgf "Invalid cmi object: %a" Fpath.pp location
+  match Cmt_format.read location with
+  | None, _ -> error_msgf "Invalid cmi object: %s" location
   | Some cmi, _ ->
       let intfs = cmi.Cmi_format.cmi_crcs in
       let intfs = List.map to_elt intfs in
       let intfs = List.sort elt_compare intfs in
       let impls = [] in
       let format = Format (Cmi, cmi) in
-      let name = Unitname.modulize (Fpath.to_string location) in
+      let name = Unitname.modulize location in
       let exports = elt_find (Unitname.modname name) intfs in
       Ok { name; version; exports; intfs; impls; format }
-  | exception _ -> error_msgf "Invalid cmi object: %a" Fpath.pp location
+  | exception _ -> error_msgf "Invalid cmi object: %s" location
 
 let info_of_cmo ~location ~version ic =
   let cu_pos = input_binary_int ic in
@@ -175,13 +172,13 @@ let info_of_cmo ~location ~version ic =
   let intfs = List.sort elt_compare intfs in
   let impls = [] in
   let format = Format (Cmo, cu) in
-  let name = Unitname.modulize (Fpath.to_string location) in
+  let name = Unitname.modulize location in
   let exports = [ (Unitname.modname name, None) ] in
   Ok { name; version; exports; intfs; impls; format }
 
 let info_of_cmx ~location ~version ic =
   let ui = (input_value ic : Cmx_format.unit_infos) in
-  let name = Unitname.modulize (Fpath.to_string location) in
+  let name = Unitname.modulize location in
   let exports = [ (Unitname.modname name, Some (Digest.input ic)) ] in
   let intfs = List.map to_elt ui.ui_imports_cmi in
   let intfs = List.sort elt_compare intfs in
@@ -222,7 +219,7 @@ let info_of_cma ~location ~version ic =
   let intfs = List.map to_elt intfs in
   let impls = [] in
   let format = Format (Cma, toc) in
-  let name = Unitname.modulize (Fpath.to_string location) in
+  let name = Unitname.modulize location in
   Ok { name; version; exports; intfs; impls; format }
 
 let info_of_cmxa ~location ~version ic =
@@ -259,10 +256,10 @@ let info_of_cmxa ~location ~version ic =
   let impls = Modname.Map.bindings m in
   let impls = List.map to_elt impls in
   let format = Format (Cmxa, li) in
-  let name = Unitname.modulize (Fpath.to_string location) in
+  let name = Unitname.modulize location in
   Ok { name; version; exports; intfs; impls; format }
 
-let is_intf location = Fpath.mem_ext [ ".mli" ] location
+let is_intf location = Filename.extension location = ".mli"
 
 let from_object location { Misc.Magic_number.kind; version } ic =
   let version = Some version in
@@ -272,18 +269,20 @@ let from_object location { Misc.Magic_number.kind; version } ic =
   | Cma -> info_of_cma ~location ~version ic
   | Cmx _ -> info_of_cmx ~location ~version ic
   | Cmxa _ -> info_of_cmxa ~location ~version ic
-  | _ -> error_msgf "Unexpected OCaml object: %a" Fpath.pp location
+  | _ -> error_msgf "Unexpected OCaml object: %s" location
 
 let v location =
-  OS.File.with_ic location @@ fun ic () ->
+  let ic = open_in location in
+  let finally () = close_in ic in
+  Fun.protect ~finally @@ fun () ->
   match Misc.Magic_number.read_info ic with
   | Ok info -> from_object location info ic
-  | Error _ -> error_msgf "Invalid object: %a" Fpath.pp location
+  | Error _ -> error_msgf "Invalid object: %s" location
 
-let pp ppf t = Fmt.string ppf (Unitname.filepath t.name)
+let pp ppf t = Format.pp_print_string ppf (Unitname.filepath t.name)
 
 let v location =
-  match v location () |> R.join with
+  match v location with
   | value -> value
   | exception Inconsistency (unit, name, crc, crc') ->
       error_msgf
@@ -303,66 +302,3 @@ let vs lst =
         Ok (a :: acc)
   in
   List.fold_left fn (Ok []) lst
-
-let dummy = String.make Digest.length '-'
-
-let show_elt ppf = function
-  | Qualified (name, crc) ->
-      Fmt.pf ppf "\t%a\t%a\n%!"
-        Fmt.(styled `Bold Digest.pp)
-        crc
-        Fmt.(styled `Yellow Modname.pp)
-        name
-  | Fully_qualified (name, crc, location) ->
-      Fmt.pf ppf "\t%a\t%a (%a)\n%!"
-        Fmt.(styled `Bold Digest.pp)
-        crc
-        Fmt.(styled `Yellow Modname.pp)
-        name
-        Fmt.(styled `Green Fpath.pp)
-        location
-  | Named name ->
-      Fmt.pf ppf "\t%a\t%a\n%!"
-        Fmt.(styled `Bold string)
-        dummy
-        Fmt.(styled `Yellow Modname.pp)
-        name
-  | Located (name, location) ->
-      Fmt.pf ppf "\t%a\t%a (%a)\n%!"
-        Fmt.(styled `Bold string)
-        dummy
-        Fmt.(styled `Yellow Modname.pp)
-        name
-        Fmt.(styled `Green Fpath.pp)
-        location
-
-let show_export ppf (name, crc) =
-  match crc with
-  | None ->
-      Fmt.pf ppf "\t%a\t%a\n%!"
-        Fmt.(styled `Bold string)
-        dummy
-        Fmt.(styled `Yellow Modname.pp)
-        name
-  | Some crc ->
-      Fmt.pf ppf "\t%a\t%a\n%!"
-        Fmt.(styled `Bold Digest.pp)
-        crc
-        Fmt.(styled `Yellow Modname.pp)
-        name
-
-let show ppf t =
-  Fmt.pf ppf "File: %a\n%!"
-    Fmt.(styled `Green string)
-    (Unitname.filepath t.name);
-  Fmt.pf ppf "Name: %a\n%!"
-    Fmt.(styled `Yellow Modname.pp)
-    (Unitname.modname t.name);
-  if Stdlib.Option.is_some t.version then
-    Fmt.pf ppf "Version: %d\n%!" (Stdlib.Option.get t.version);
-  if t.intfs <> [] then Fmt.pf ppf "Interfaces imported:\n%!";
-  List.iter (Fmt.pf ppf "%a" show_elt) t.intfs;
-  if t.impls <> [] then Fmt.pf ppf "Implementations imported:\n%!";
-  List.iter (Fmt.pf ppf "%a" show_elt) t.impls;
-  Fmt.pf ppf "Export:\n%!";
-  List.iter (Fmt.pf ppf "%a" show_export) t.exports

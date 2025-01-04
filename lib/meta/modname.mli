@@ -30,13 +30,13 @@ val v : string -> t
 (** [v str] calls {!val:of_string}. It raises an [Invalid_argument] instead of
     returning an error. *)
 
-val pp : t Fmt.t
+val pp : Format.formatter -> t -> unit
 (** Pretty printer of {!type:t}. *)
 
 val to_string : t -> string
 (** [to_string t] casts the given [t] as a [string]. *)
 
 val compare : t -> t -> int
-val reflect : t Fmt.t
+val reflect : Format.formatter -> t -> unit
 
 module Map : Map.S with type key = t

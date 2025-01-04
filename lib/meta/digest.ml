@@ -1,7 +1,7 @@
 include Stdlib.Digest
 
-let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-let pp ppf t = Fmt.string ppf (Stdlib.Digest.to_hex t)
+let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
+let pp ppf t = Format.pp_print_string ppf (Stdlib.Digest.to_hex t)
 
 let of_string str =
   match of_hex str with

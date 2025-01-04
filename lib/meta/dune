@@ -1,15 +1,3 @@
-(library
- (name vif_top)
- (modules vif_top)
- (public_name vif.top)
- (modes native)
- (libraries
-  vif.meta
-  compiler-libs
-  compiler-libs.common
-  compiler-libs.toplevel
-  compiler-libs.native-toplevel))
-
 (ocamllex vif_meta_lexer)
 
 (library

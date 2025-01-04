@@ -2,7 +2,7 @@ let src = Logs.Src.create "vif.top"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type cfg = { stdlib: Fpath.t; roots: Fpath.t list }
+type cfg = { stdlib: Fpath.t; roots: string list }
 
 let errors = ref false
 
@@ -117,6 +117,9 @@ module Phrase = struct
     | _ -> false
 end
 
+let ( / ) = Filename.concat
+let to_dir_path = Vif_meta.to_dir_path
+
 let load cfg str =
   let ( let* ) = Result.bind in
   Log.debug (fun m -> m "load: %s" str);
@@ -127,25 +130,25 @@ let load cfg str =
   let fn acc (_, path, descr) =
     let path =
       match List.assoc_opt "directory" descr with
-      | Some (dir :: _) -> Fpath.(to_dir_path (path / dir))
+      | Some (dir :: _) -> to_dir_path (path / dir)
       | Some [] | None -> path
     in
     match List.assoc_opt "plugin" descr with
-    | Some (plugin :: _) -> Fpath.(path / plugin) :: acc
+    | Some (plugin :: _) -> (path / plugin) :: acc
     | Some [] | None -> acc
   in
   let artifacts = List.fold_left fn [] deps in
   let artifacts = List.rev artifacts in
-  Log.debug (fun m -> m "load: @[<hov>%a@]" Fmt.(Dump.list Fpath.pp) artifacts);
+  Log.debug (fun m -> m "load: @[<hov>%a@]" Fmt.(Dump.list string) artifacts);
   Ok artifacts
 
 let load cfg str =
   match load cfg str with
   | Ok artifacts ->
       let fn artifact =
-        let dir = Fpath.parent artifact in
-        Topdirs.dir_directory Fpath.(to_string dir);
-        Topdirs.dir_load Fmt.stderr (Fpath.to_string artifact)
+        let dir = Filename.dirname artifact in
+        Topdirs.dir_directory dir;
+        Topdirs.dir_load Fmt.stderr artifact
       in
       List.iter fn artifacts
   | Error (`Msg msg) -> Log.err (fun m -> m "Impossible to load %S: %s" str msg)
@@ -198,7 +201,7 @@ let eval _cfg ppf ph =
       if !Clflags.dump_parsetree then Printast.top_phrase ppf phrase;
       if !Clflags.dump_source then Pprintast.top_phrase ppf phrase;
       Env.reset_cache_toplevel ();
-      try Toploop.execute_phrase true (* verbose *) ppf phrase
+      try Toploop.execute_phrase false (* verbose *) ppf phrase
       with Compenv.Exit_with_status code ->
         Format.fprintf ppf "[%d]@." code;
         false
@@ -231,7 +234,8 @@ let redirect : fn:(capture:(Buffer.t -> unit) -> 'a) -> 'a =
     Unix.dup2 ~cloexec:false stdout' Unix.stdout;
     Unix.dup2 ~cloexec:false stderr' Unix.stderr;
     Unix.close stdout';
-    Unix.close stderr'
+    Unix.close stderr';
+    Sys.remove filename
   in
   Fun.protect ~finally @@ fun () -> fn ~capture
 
@@ -313,7 +317,6 @@ let eval cfg cmd =
     capture ();
     trim (List.rev !lines)
   in
-  Log.debug (fun m -> m "Start to eval: %a" Fmt.(Dump.list (fmt "%S")) cmd);
   let fn ~capture =
     capture_compiler_stuff ppf @@ fun () ->
     let cmd =

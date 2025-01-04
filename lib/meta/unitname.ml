@@ -18,11 +18,11 @@ let modulize filepath =
   { modname; filepath }
 
 let pp ppf { modname; filepath } =
-  Fmt.pf ppf "%a(%s)" Modname.pp modname filepath
+  Format.fprintf ppf "%a(%s)" Modname.pp modname filepath
 
 let pp_as_modname ppf { modname; _ } = Modname.pp ppf modname
 let pp_as_filepath ppf { filepath; _ } = Format.pp_print_string ppf filepath
-let reflect ppf t = Fmt.pf ppf "(Unitname.modulize %S)" t.filepath
+let reflect ppf t = Format.fprintf ppf "(Unitname.modulize %S)" t.filepath
 let modname { modname; _ } = modname
 let filename { filepath; _ } = Filename.basename filepath
 let filepath { filepath; _ } = filepath
