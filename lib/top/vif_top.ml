@@ -142,13 +142,23 @@ let load cfg str =
   Log.debug (fun m -> m "load: @[<hov>%a@]" Fmt.(Dump.list string) artifacts);
   Ok artifacts
 
+let null =
+  Format.formatter_of_out_functions
+    {
+      Format.out_string= (fun _ _ _ -> ())
+    ; out_flush= ignore
+    ; out_newline= ignore
+    ; out_spaces= ignore
+    ; out_indent= ignore
+    }
+
 let load cfg str =
   match load cfg str with
   | Ok artifacts ->
       let fn artifact =
         let dir = Filename.dirname artifact in
         Topdirs.dir_directory dir;
-        Topdirs.dir_load Fmt.stderr artifact
+        try Topdirs.dir_load null artifact with _ -> ()
       in
       List.iter fn artifacts
   | Error (`Msg msg) -> Log.err (fun m -> m "Impossible to load %S: %s" str msg)
@@ -234,8 +244,8 @@ let redirect : fn:(capture:(Buffer.t -> unit) -> 'a) -> 'a =
     Unix.dup2 ~cloexec:false stdout' Unix.stdout;
     Unix.dup2 ~cloexec:false stderr' Unix.stderr;
     Unix.close stdout';
-    Unix.close stderr';
-    Sys.remove filename
+    Unix.close stderr'
+    (* Sys.remove filename *)
   in
   Fun.protect ~finally @@ fun () -> fn ~capture
 

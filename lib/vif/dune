@@ -1,4 +1,6 @@
 (library
  (name vif)
  (public_name vif)
+ (flags
+  (:standard -linkall))
  (libraries httpcats tyre))

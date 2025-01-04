@@ -9,6 +9,8 @@ let pchar =
   arr.(Char.code '@') <- true;
   arr
 
+let safe_host = pchar
+
 let safe_path =
   let v = "!$&'()*+,;=" in
   let arr = Array.copy pchar in
@@ -52,6 +54,7 @@ let encode safe_chars str =
   scan 0 0; Buffer.contents buf
 
 let encode_path str = encode safe_path str
+let encode_host str = encode safe_host str
 
 let encode_query lst =
   let enc =

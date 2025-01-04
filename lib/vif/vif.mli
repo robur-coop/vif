@@ -22,6 +22,14 @@ module U : sig
   val eval : ('f, string) t -> 'f
 end
 
+module R : sig
+  type 'r route
+
+  val route : ('f, 'r) U.t -> 'f -> 'r route
+  val ( --> ) : ('f, 'r) U.t -> 'f -> 'r route
+  val dispatch : default:(string -> 'r) -> 'r route list -> target:string -> 'r
+end
+
 module C : sig
   (** Module [C] implements the {b c}lient part of the HTTP protocol. *)
 
@@ -66,3 +74,17 @@ module C : sig
           C.request ~meth:`GET readme org repository branch
       ]} *)
 end
+
+type config =
+  [ `HTTP_1_1 of H1.Config.t
+  | `H2 of H2.Config.t
+  | `Both of H1.Config.t * H2.Config.t ]
+
+val run :
+     ?stop:Httpcats.Server.stop
+  -> ?config:config
+  -> ?backlog:int
+  -> ?tls_config:Tls.Config.server
+  -> (Httpcats.Server.reqd -> unit) R.route list
+  -> Unix.sockaddr
+  -> unit

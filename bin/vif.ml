@@ -14,13 +14,7 @@ let _reporter ppf =
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
-(*
-let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
-let () = Logs.set_reporter (reporter Fmt.stdout)
-let () = Logs.set_level ~all:true (Some Logs.Debug)
-*)
-
-let run roots stdlib main =
+let run _quiet roots stdlib main =
   let roots = List.map Fpath.to_string roots in
   let cfg = Vif_top.config ~stdlib roots in
   let main =
@@ -81,9 +75,82 @@ let setup_stdlib =
   let open Term in
   ret (const setup_stdlib $ const ())
 
+let docs_output = "OUTPUT"
+
+let verbosity =
+  let env = Cmd.Env.info "VIF_LOGS" in
+  Logs_cli.level ~env ~docs:docs_output ()
+
+let renderer =
+  let env = Cmd.Env.info "VIF_FMT" in
+  Fmt_cli.style_renderer ~env ~docs:docs_output ()
+
+let utf_8 =
+  let doc = "Allow us to emit UTF-8 characters." in
+  let env = Cmd.Env.info "VIF_UTF_8" in
+  let open Arg in
+  value
+  & opt bool true
+  & info [ "with-utf-8" ] ~doc ~docv:"BOOL" ~docs:docs_output ~env
+
+let app_style = `Cyan
+let err_style = `Red
+let warn_style = `Yellow
+let info_style = `Blue
+let debug_style = `Green
+
+let pp_header ~pp_h ppf (l, h) =
+  match l with
+  | Logs.Error ->
+      let h = Option.value ~default:"ERROR" h in
+      pp_h ppf err_style h
+  | Logs.Warning ->
+      let h = Option.value ~default:"WARN" h in
+      pp_h ppf warn_style h
+  | Logs.Info ->
+      let h = Option.value ~default:"INFO" h in
+      pp_h ppf info_style h
+  | Logs.Debug ->
+      let h = Option.value ~default:"DEBUG" h in
+      pp_h ppf debug_style h
+  | Logs.App ->
+      Fun.flip Option.iter h @@ fun h ->
+      Fmt.pf ppf "[%a] " Fmt.(styled app_style (fmt "%10s")) h
+
+let pp_header =
+  let pp_h ppf style h = Fmt.pf ppf "[%a]" Fmt.(styled style (fmt "%10s")) h in
+  pp_header ~pp_h
+
+let reporter ppf =
+  let report src level ~over k msgf =
+    let k _ = over (); k () in
+    let with_metadata header _tags k ppf fmt =
+      Fmt.kpf k ppf
+        ("[%02d]%a[%a]: @[<hov>" ^^ fmt ^^ "@]\n%!")
+        (Stdlib.Domain.self () :> int)
+        pp_header (level, header)
+        Fmt.(styled `Magenta (fmt "%20s"))
+        (Logs.Src.name src)
+    in
+    msgf @@ fun ?header ?tags fmt -> with_metadata header tags k ppf fmt
+  in
+  { Logs.report }
+
+let setup_logs utf_8 style_renderer level =
+  let stdout =
+    Format.make_formatter (output_substring stdout) (fun () -> flush stdout)
+  in
+  Fmt_tty.setup_std_outputs ~utf_8 ?style_renderer ();
+  let reporter = reporter Fmt.stderr in
+  Logs.set_reporter reporter;
+  Logs.set_level level;
+  (Option.is_none level, stdout)
+
+let setup_logs = Term.(const setup_logs $ utf_8 $ renderer $ verbosity)
+
 let term =
   let open Term in
-  const run $ Vif_meta.setup $ setup_stdlib $ main
+  const run $ setup_logs $ Vif_meta.setup $ setup_stdlib $ main
 
 let cmd =
   let doc = "vif" in

@@ -59,6 +59,7 @@ module Path = struct
   type t = string list
 
   let of_string str =
+    let str = String.trim str in
     let pkg = String.split_on_char '.' str in
     let rec go = function
       | [] -> Ok pkg
@@ -72,7 +73,7 @@ module Path = struct
     | Ok pkg -> pkg
     | Error (`Msg msg) -> invalid_arg msg
 
-  let pp ppf pkg = Format.pp_print_string ppf (String.concat "." pkg)
+  let pp ppf pkg = Format.fprintf ppf "%S" (String.concat "." pkg)
   let equal a b = try List.for_all2 String.equal a b with _ -> false
 end
 
@@ -346,13 +347,38 @@ let dependencies_of (_path, descr) =
 
 exception Cycle
 
-let equal_dep meta_path (meta_path', _, _) = Path.equal meta_path meta_path'
+let get_dep (_, path, descr) graph =
+  let deps = dependencies_of (path, descr) in
+  List.map
+    (fun name ->
+      Log.debug (fun m -> m "search %a" Path.pp name);
+      List.find (fun (name', _, _) -> Path.equal name name') graph)
+    deps
 
+type graph = (Path.t * string * Assoc.t) list
+
+let dfs (graph : graph) visited start_node =
+  let rec explore path visited node =
+    if List.mem node path then raise Cycle
+    else if List.mem node visited then visited
+    else
+      let new_path = node :: path in
+      let edges = get_dep node graph in
+      let visited = List.fold_left (explore new_path) visited edges in
+      node :: visited
+  in
+  explore [] visited start_node
+
+let sort graph =
+  List.fold_left (fun visited node -> dfs graph visited node) [] graph
+
+(*
 let sort libs =
   let rec go acc later todo progress =
     match (todo, later) with
     | [], [] -> List.rev acc
-    | [], _ -> if progress then go acc [] later false else raise Cycle
+    | [], _ ->
+        if progress then go acc [] later false else raise Cycle
     | ((_, path, descr) as x) :: r, _ ->
         let deps = dependencies_of (path, descr) in
         let deps_already_added =
@@ -368,6 +394,7 @@ let sort libs =
       libs
   in
   go starts [] todo false
+*)
 
 let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
   let rec go acc visited = function
@@ -388,7 +415,12 @@ let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
         | Error _ as err -> err)
   in
   let open Rresult in
-  go [] [] [ meta_path ] >>| sort
+  go [] [] [ meta_path ] >>| fun lst ->
+  Log.debug (fun m ->
+      m "%a requires: %a" Path.pp meta_path
+        Fmt.(Dump.list Path.pp)
+        (List.map (fun (x, _, _) -> x) lst));
+  sort lst |> List.rev
 
 let to_artifacts pkgs =
   let ( let* ) = Result.bind in

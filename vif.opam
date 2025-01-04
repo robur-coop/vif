@@ -12,9 +12,9 @@ depends: [
   "fmt"
   "bos"
   "logs"
-  "unix"
   "fpath"
   "cmdliner"
+  "httpcats"
 ]
 conflicts: [ "result" {< "1.5"} ]
 build: [
