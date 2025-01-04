@@ -1,34 +1,26 @@
 type 'a atom = 'a Tyre.t
 
-module Types = struct
-  type ('fu, 'return) path =
-    | Host : string -> ('r, 'r) path
-    | Rel : ('r, 'r) path
-    | Path_const : ('f, 'r) path * string -> ('f, 'r) path
-    | Path_atom : ('f, 'a -> 'r) path * 'a atom -> ('f, 'r) path
+type ('fu, 'return) path =
+  | Host : string -> ('r, 'r) path
+  | Rel : ('r, 'r) path
+  | Path_const : ('f, 'r) path * string -> ('f, 'r) path
+  | Path_atom : ('f, 'a -> 'r) path * 'a atom -> ('f, 'r) path
 
-  type ('fu, 'return) query =
-    | Nil : ('r, 'r) query
-    | Any : ('r, 'r) query
-    | Query_atom : string * 'a atom * ('f, 'r) query -> ('a -> 'f, 'r) query
+type ('fu, 'return) query =
+  | Nil : ('r, 'r) query
+  | Any : ('r, 'r) query
+  | Query_atom : string * 'a atom * ('f, 'r) query -> ('a -> 'f, 'r) query
 
-  type slash = Slash | No_slash | Maybe_slash
-
-  type ('f, 'r) url =
-    | Url : slash * ('f, 'x) path * ('x, 'r) query -> ('f, 'r) url
-end
+type slash = Slash | No_slash | Maybe_slash
+type ('f, 'r) t = Url : slash * ('f, 'x) path * ('x, 'r) query -> ('f, 'r) t
 
 module Path = struct
-  type ('f, 'r) t = ('f, 'r) Types.path
-
-  open Types
-
   let host str = Host str
   let relative = Rel
   let add path str = Path_const (path, str)
   let add_atom path atom = Path_atom (path, atom)
 
-  let rec _concat : type f r x. (f, x) t -> (x, r) t -> (f, r) t =
+  let rec _concat : type f r x. (f, x) path -> (x, r) path -> (f, r) path =
    fun p1 p2 ->
     match p2 with
     | Host _ -> p1
@@ -38,20 +30,16 @@ module Path = struct
 end
 
 module Query = struct
-  type ('f, 'r) t = ('f, 'r) Types.query
-
-  open Types
-
-  let nil : _ t = Nil
+  let nil : _ query = Nil
   let any = Any
   let add n x query = Query_atom (n, x, query)
 
-  let rec make_any : type f r. (f, r) t -> (f, r) t = function
+  let rec make_any : type f r. (f, r) query -> (f, r) query = function
     | Nil -> Any
     | Any -> Any
     | Query_atom (n, x, q) -> Query_atom (n, x, make_any q)
 
-  let rec _concat : type f r x. (f, x) t -> (x, r) t -> (f, r) t =
+  let rec _concat : type f r x. (f, x) query -> (x, r) query -> (f, r) query =
    fun q1 q2 ->
     match q1 with
     | Nil -> q2
@@ -60,16 +48,8 @@ module Query = struct
 end
 
 module Url = struct
-  type ('f, 'r) t = ('f, 'r) Types.url
-
-  open Types
-
   let make ?(slash = No_slash) path query : _ t = Url (slash, path, query)
 end
-
-type ('f, 'r) path = ('f, 'r) Path.t
-type ('f, 'r) query = ('f, 'r) Query.t
-type ('f, 'r) t = ('f, 'r) Url.t
 
 let nil = Query.nil
 let any = Query.any
@@ -89,7 +69,7 @@ let eval_top_atom : type a. a Tyre.Internal.raw -> a -> string list = function
   | e -> fun x -> [ eval_atom e x ]
 
 let rec eval_path : type r f.
-    (f, r) Path.t -> (string option -> string list -> r) -> f =
+    (f, r) path -> (string option -> string list -> r) -> f =
  fun p k ->
   match p with
   | Host str -> k (Some str) []
@@ -100,7 +80,7 @@ let rec eval_path : type r f.
       eval_path p fn
 
 let rec eval_query : type r f.
-    (f, r) Query.t -> ((string * string list) list -> r) -> f =
+    (f, r) query -> ((string * string list) list -> r) -> f =
  fun q k ->
   match q with
   | Nil -> k []
