@@ -1,3 +1,7 @@
+let src = Logs.Src.create "vif.r"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 type 'a atom = 'a Tyre.Internal.wit
 
 let atom re = Tyre.Internal.build re
@@ -218,6 +222,8 @@ let rec find_and_trigger : type r.
  fun ~original subs -> function
   | [] -> assert false
   | Re (f, id, ret) :: l ->
+      Log.debug (fun m -> m "original:%S subs:%a\n%!" original Re.Group.pp subs);
+      Log.debug (fun m -> m "recognized:%b" (Re.Mark.test subs id));
       if Re.Mark.test subs id then extract ~original ret subs f
       else find_and_trigger ~original subs l
 
@@ -230,4 +236,7 @@ let dispatch : type r.
     try
       let subs = Re.exec re target in
       find_and_trigger ~original:target subs wl
-    with Not_found -> default target
+    with Not_found ->
+      let bt = Printexc.get_raw_backtrace () in
+      Log.warn (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
+      default target
