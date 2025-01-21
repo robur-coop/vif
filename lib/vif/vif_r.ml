@@ -1,7 +1,3 @@
-let src = Logs.Src.create "vif.r"
-
-module Log = (val Logs.src_log src : Logs.LOG)
-
 type 'a atom = 'a Tyre.Internal.wit
 
 let atom re = Tyre.Internal.build re
@@ -17,21 +13,21 @@ let list ?m ~component n re =
       if n = 0 then alt [ epsilon; seq [ re; repn (seq [ comma; re ]) 0 m ] ]
       else seq [ re; repn (seq [ comma; re ]) (n - 1) m ]
 
-let atom_path : type a. int -> a Tyre.Internal.raw -> int * a atom * Re.t =
+let atom_path : type a. int -> a Tyre.Internal.raw -> int * a atom * Re.t list =
   let open Re in
   fun i -> function
     | Rep e ->
         let _, w, re = atom 1 e in
         ( i + 1
         , Rep (i, w, Re.compile re)
-        , group (list ~component:`Path 0 (no_group re)) )
+        , [ group (list ~component:`Path 0 (no_group re)) ] )
     | Opt e ->
         let i', w, re = atom i e in
         let id, re = mark re in
-        (i', Opt (id, w), seq [ alt [ epsilon; seq [ slash; re ] ] ])
+        (i', Opt (id, w), [ alt [ epsilon; seq [ slash; re ] ] ])
     | e ->
         let i', w, re = atom i e in
-        (i', w, seq [ slash; re ])
+        (i', w, [ slash; re ])
 
 let atom_query : type a. int -> a Tyre.Internal.raw -> int * a atom * Re.t =
   let open Re in
@@ -60,7 +56,7 @@ let rec path : type r f.
   | Path_atom (p, a) ->
       let i', wp, rp = path i p in
       let i'', wa, ra = atom_path i' (Tyre.Internal.from_t a) in
-      (i'', Path_atom (wp, wa), ra :: rp)
+      (i'', Path_atom (wp, wa), List.rev_append ra rp)
 
 type ('fu, 'return) query =
   | Nil : ('r, 'r) query
@@ -68,14 +64,15 @@ type ('fu, 'return) query =
   | Cons : 'a atom * ('f, 'r) query -> ('a -> 'f, 'r) query
 
 let rec collect_query : type r f.
-    (f, r) Vif_u.query -> (f, r) query * bool * (string * (Re.t * int)) list =
-  function
-  | Nil -> (Nil, false, [])
-  | Any -> (Any, true, [])
+       (f, r) Vif_u.query
+    -> int * (f, r) query * bool * (string * (Re.t * int)) list = function
+  | Nil -> (0, Nil, false, [])
+  | Any -> (0, Any, true, [])
   | Query_atom (s, a, q) ->
       let grps, wa, ra = atom_query 0 (Tyre.Internal.from_t a) in
-      let wq, b_any, rq = collect_query q in
-      (Cons (wa, wq), b_any, (s, (ra, grps)) :: rq)
+      let total_grps, wq, b_any, rq = collect_query q in
+      let total_grps = total_grps + grps in
+      (total_grps, Cons (wa, wq), b_any, (s, (ra, grps)) :: rq)
 
 let rec shift_literals : type a. int -> a atom -> a atom =
  fun shift -> function
@@ -114,11 +111,11 @@ let build_permutation offset count l_before l_after =
 let sort_query = List.sort (fun (x, _) (y, _) -> String.compare x y)
 
 let query current_idx q =
-  let wq, b, rql = collect_query q in
+  let grps, wq, b, rql = collect_query q in
   let rel = sort_query rql in
   let p = build_permutation current_idx (fun (_, (_, i)) -> i) rql rel in
   let wq = permut_query 0 p wq in
-  (wq, b, rel)
+  (grps, wq, b, rel)
 
 type ('fu, 'return) t = Url : ('f, 'x) path * ('x, 'r) query -> ('f, 'r) t
 
@@ -131,22 +128,22 @@ let rec intersperse sep = function
   | [ x ] -> [ x ]
   | x :: r -> x :: sep :: intersperse sep r
 
-let url : type f r. (f, r) Vif_u.t -> (f, r) t * Re.t =
- fun (Vif_u.Url (slash, p, q)) ->
+let url : type f r. int -> (f, r) Vif_u.t -> int * (f, r) t * Re.t =
+ fun i (Vif_u.Url (slash, p, q)) ->
   let end_path =
     match slash with
     | Vif_u.No_slash -> Re.epsilon
     | Slash -> Re.char '/'
     | Maybe_slash -> Re.(opt (Re.char '/'))
   in
-  let idx, wp, rp = path 1 p in
+  let idx, wp, rp = path i p in
   match q with
-  | Nil -> (Url (wp, Nil), Re.seq (List.rev (end_path :: rp)))
+  | Nil -> (idx, Url (wp, Nil), Re.seq (List.rev (end_path :: rp)))
   | Any ->
       let end_re = Re.(opt (seq [ Re.char '?'; rep any ])) in
-      (Url (wp, Nil), Re.seq (List.rev_append rp [ end_path; end_re ]))
+      (idx, Url (wp, Nil), Re.seq (List.rev_append rp [ end_path; end_re ]))
   | _ ->
-      let wq, any_query, rel = query idx q in
+      let grps, wq, any_query, rel = query idx q in
       let query_sep = query_sep ~any:any_query in
       let add_around_query =
         if not any_query then fun x -> x else fun l -> Re.(rep any) :: l
@@ -162,9 +159,12 @@ let url : type f r. (f, r) Vif_u.t -> (f, r) t * Re.t =
         |> add_around_query
       in
       let re = Re.seq (List.rev_append rp (end_path :: Re.char '?' :: re)) in
-      (Url (wp, wq), re)
+      (idx + grps, Url (wp, wq), re)
 
-let re t = snd (url t)
+let re t =
+  let _, _, re = url 1 t in
+  re
+
 let extract = Tyre.Internal.extract
 
 let rec extract_path : type f x r.
@@ -209,11 +209,11 @@ let ( --> ) = route
 
 type 'r re = Re : 'f * Re.Mark.t * ('f, 'r) t -> 'r re
 
-let rec build_info_list = function
+let rec build_info_list idx = function
   | [] -> ([], [])
   | Route (t, f) :: l ->
-      let rel, wl = build_info_list l in
-      let ret, re = url t in
+      let idx, ret, re = url idx t in
+      let rel, wl = build_info_list idx l in
       let id, re = Re.mark re in
       (re :: rel, Re (f, id, ret) :: wl)
 
@@ -222,21 +222,17 @@ let rec find_and_trigger : type r.
  fun ~original subs -> function
   | [] -> assert false
   | Re (f, id, ret) :: l ->
-      Log.debug (fun m -> m "original:%S subs:%a\n%!" original Re.Group.pp subs);
-      Log.debug (fun m -> m "recognized:%b" (Re.Mark.test subs id));
       if Re.Mark.test subs id then extract ~original ret subs f
       else find_and_trigger ~original subs l
 
 let dispatch : type r.
     default:(string -> r) -> r route list -> target:string -> r =
  fun ~default l ->
-  let rel, wl = build_info_list l in
+  let rel, wl = build_info_list 1 l in
   let re = Re.(compile (whole_string (alt rel))) in
   fun ~target ->
-    try
-      let subs = Re.exec re target in
-      find_and_trigger ~original:target subs wl
-    with Not_found ->
-      let bt = Printexc.get_raw_backtrace () in
-      Log.warn (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
-      default target
+    match Re.exec_opt re target with
+    | None -> default target
+    | Some subs -> (
+        try find_and_trigger ~original:target subs wl
+        with Not_found -> assert false)

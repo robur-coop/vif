@@ -28,7 +28,6 @@ let random len server req () =
   let buf = Bytes.create 0x7ff in
   Vif.Response.with_stream server `OK @@ fun oc ->
   let rec go rem =
-    Format.printf ">>> %d\n%!" rem;
     if rem > 0 then begin
       let len = Int.min rem (Bytes.length buf) in
       Mirage_crypto_rng.generate_into buf len;
