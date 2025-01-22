@@ -15,6 +15,9 @@ depends: [
   "fpath"
   "cmdliner"
   "httpcats"
+  "tyre"
+  "mirage-crypto-rng-miou-unix"
+  "hmap"
 ]
 conflicts: [ "result" {< "1.5"} ]
 build: [
