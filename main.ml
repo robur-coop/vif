@@ -55,13 +55,16 @@ let default target server req () =
   Vif.Response.with_string server `Not_found (Fmt.str "%S not found\n%!" target)
 ;;
 
-let my_device_as_arg, my_device =
-  Vif.D.device ~name:"my-device" ~finally:ignore [] ()
+let rng =
+  let open Mirage_crypto_rng_miou_unix in
+  let finally = kill in
+  Vif.D.device ~name:"rng" ~finally [] @@ fun _cfg ->
+  initialize (module Pfortuna)
 ;;
 
 let () =
   Miou_unix.run @@ fun () ->
   let sockaddr = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
   let cfg = Vif.config sockaddr in
-  Vif.run ~cfg ~default ~devices:Vif.[ D.rng; my_device_as_arg ] routes ()
+  Vif.run ~cfg ~default ~devices:Vif.Ds.[ rng; ] routes ()
 ;;
