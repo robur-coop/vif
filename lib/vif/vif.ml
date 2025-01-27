@@ -1,24 +1,30 @@
 module U = Vif_u
 module R = Vif_r
 module C = Vif_c
+module D = Vif_d
+module S = Vif_s
 
-let rng_d, rng_s =
-  let initialize () =
-    Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna))
-  in
-  let finally = Mirage_crypto_rng_miou_unix.kill in
-  Vif_d.device ~name:"rng" ~finally Vif_d.[ const () ] initialize
+module Ds = struct
+  type 'value t =
+    | [] : 'value t
+    | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
 
-module D = struct
-  include Vif_d
+  let run : Vif_d.t -> 'value t -> 'value -> Vif_d.t =
+   fun t lst user's_value ->
+    let rec go t = function
+      | [] -> t
+      | x :: r -> go (Vif_d.run t user's_value x) r
+    in
+    go t lst
 
-  let rng = rng_d
-end
-
-module S = struct
-  include Vif_s
-
-  let rng = rng_s
+  let finally : Vif_d.t -> unit =
+   fun t ->
+    let[@warning "-8"] (Vif_d.Devices m) = t in
+    let fn (Vif_d.Hmap.B (k, v)) =
+      let { Vif_d.Device.finally; _ } = Vif_d.Hmap.Key.info k in
+      finally v
+    in
+    Vif_d.Hmap.iter fn m
 end
 
 module Stream = Stream
@@ -41,16 +47,6 @@ type config = {
   ; stop: stop option
   ; sockaddr: Unix.sockaddr
 }
-
-type devices = [] : devices | ( :: ) : 'a Vif_d.arg * devices -> devices
-
-let rec keval devices k = function
-  | [] -> k devices
-  | device :: rest ->
-      let devices, _ = Vif_d.ctor devices device in
-      keval devices k rest
-
-let eval devices = keval Vif_d.(Devices Hmap.empty) Fun.id devices
 
 let config ?http ?tls ?(backlog = 64) ?stop sockaddr =
   let http =
@@ -84,14 +80,13 @@ let run ~cfg ~devices ~default routes user's_value =
         Httpcats.Server.clear ?stop:cfg.stop ~config ~handler cfg.sockaddr
     | None, None -> Httpcats.Server.clear ?stop:cfg.stop ~handler cfg.sockaddr
   in
-  let[@warning "-8"] (Vif_d.Devices devices) = eval devices in
+  let[@warning "-8"] (Vif_d.Devices devices) =
+    Ds.run Vif_d.empty devices user's_value
+  in
   let handler = handler ~default routes devices user's_value in
   let prm = Miou.async @@ fun () -> handle handler in
   if domains > 0 then
     Miou.parallel handle (List.init domains (Fun.const handler))
     |> List.iter (function Ok () -> () | Error exn -> raise exn);
   Miou.await_exn prm;
-  let finally (Vif_d.Hmap.B (k, v)) =
-    (Vif_d.Hmap.Key.info k).Vif_d.Device.finally v
-  in
-  Vif_d.Hmap.iter finally devices
+  Ds.finally (Vif_d.Devices devices)

@@ -77,26 +77,31 @@ module C : sig
 end
 
 module D : sig
-  type 'a arg
-  type 'a device
+  type ('value, 'a) arg
+  type ('value, 'a) device
 
-  type ('f, 'r) args =
-    | [] : ('r, 'r) args
-    | ( :: ) : 'a arg * ('f, 'a -> 'r) args -> ('f, 'r) args
+  type ('value, 'fn, 'r) args =
+    | [] : ('value, 'value -> 'r, 'r) args
+    | ( :: ) :
+        ('value, 'a) arg * ('value, 'fn, 'r) args
+        -> ('value, 'a -> 'fn, 'r) args
 
-  val const : 'a -> 'a arg
-  val map : ('f, 'r) args -> 'f -> 'r arg
+  val value : ('value, 'a) device -> ('value, 'a) arg
+  val const : 'a -> ('value, 'a) arg
+  val map : ('value, 'f, 'r) args -> 'f -> ('value, 'r) arg
 
   val device :
        name:string
     -> finally:('r -> unit)
-    -> ('f, 'r) args
+    -> ('v, 'f, 'r) args
     -> 'f
-    -> 'r arg * 'r device
+    -> ('v, 'r) device
+end
 
-  (** Some devices. *)
-
-  val rng : Mirage_crypto_rng_miou_unix.rng arg
+module Ds : sig
+  type 'value t =
+    | [] : 'value t
+    | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
 end
 
 module S : sig
@@ -104,8 +109,7 @@ module S : sig
   type reqd = [ `V1 of H1.Reqd.t | `V2 of H2.Reqd.t ]
 
   val reqd : t -> reqd
-  val device : 'a D.device -> t -> 'a
-  val rng : Mirage_crypto_rng_miou_unix.rng D.device
+  val device : ('value, 'a) D.device -> t -> 'a
 end
 
 module Stream : sig
@@ -223,11 +227,9 @@ val config :
 
 val stop : unit -> stop
 
-type devices = [] : devices | ( :: ) : 'a D.arg * devices -> devices
-
 val run :
      cfg:config
-  -> devices:devices
+  -> devices:'value Ds.t
   -> default:(string -> S.t -> Request.t -> 'value -> unit)
   -> (S.t -> Request.t -> 'value -> unit) R.route list
   -> 'value

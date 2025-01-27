@@ -1,64 +1,79 @@
 type t = ..
 
 module Device = struct
-  type nonrec 'a t = {
-      name: string
-    ; initialize: t -> t * 'a
-    ; finally: 'a -> unit
-  }
+  type nonrec 'a t = { name: string; finally: 'a -> unit }
 
-  let make ~initialize ~finally name = { name; initialize; finally }
+  let make ~name finally = { name; finally }
 end
 
 module Hmap = Hmap.Make (Device)
 
+let failwithf fmt = Format.kasprintf failwith fmt
+
 type t += Devices : Hmap.t -> t
-(* NOTE(dinosaure): or module-rec? *)
 
-type 'a arg =
-  | Value : 'a Hmap.key -> 'a arg
-  | Const : 'a -> 'a arg
-  | Map : ('f, 'a) args * 'f -> 'a arg
+let empty = Devices Hmap.empty
 
-and ('fu, 'return) args =
-  | [] : ('r, 'r) args
-  | ( :: ) : 'a arg * ('f, 'a -> 'r) args -> ('f, 'r) args
+type ('value, 'a) arg =
+  | Value : 'a Hmap.key -> ('value, 'a) arg
+  | Const : 'a -> ('value, 'a) arg
+  | Map : ('value, 'fn, 'r) args * 'fn -> ('value, 'r) arg
 
-and 'a device = 'a Hmap.key
+and ('value, 'fn, 'r) args =
+  | [] : ('value, 'value -> 'r, 'r) args
+  | ( :: ) :
+      ('value, 'a) arg * ('value, 'fn, 'r) args
+      -> ('value, 'a -> 'fn, 'r) args
 
-let map args fn = Map (args, fn)
-let const value = Const value
-
-let rec ctor : type a. t -> a arg -> t * a =
- fun devices -> function
+let rec arg : type a v. t -> v -> (v, a) arg -> t * a =
+ fun devices user's_value -> function
   | Const v -> (devices, v)
-  | Map (lst, fn) -> keval_args devices (fun devices x -> (devices, x)) lst fn
-  | Value k -> (
+  | Value k ->
       let[@warning "-8"] (Devices m) = devices in
-      match Hmap.find k m with
-      | None ->
-          let devices, device = (Hmap.Key.info k).Device.initialize devices in
-          let[@warning "-8"] (Devices devices) = devices in
-          let devices = Hmap.add k device devices in
-          (Devices devices, device)
-      | Some device -> (devices, device))
+      begin
+        match Hmap.find k m with
+        | None -> failwithf "Device %s not found" (Hmap.Key.info k).name
+        | Some device -> (devices, device)
+      end
+  | Map (args, fn) ->
+      let v = ref None in
+      let k fn devices =
+        v := Some devices;
+        fn user's_value
+      in
+      let value = keval_args devices user's_value k args fn in
+      (Option.get !v, value)
 
-and keval_args : type f x r. t -> (t -> x -> r) -> (f, x) args -> f -> r =
- fun devices k -> function
-  | [] -> k devices
+and keval_args : type f r v a.
+    t -> v -> ((v -> r) -> t -> r) -> (v, f, r) args -> f -> r =
+ fun devices user's_value k -> function
+  | [] -> fun fn -> k fn devices
   | x :: r ->
-      let devices, v = ctor devices x in
-      let k devices fn = k devices (fn v) in
-      keval_args devices k r
+      let devices, v = arg devices user's_value x in
+      fun fn ->
+        let k fn devices = k fn devices in
+        (keval_args devices user's_value k r) (fn v)
 
-let device : type r.
-    name:string -> finally:(r -> unit) -> ('f, r) args -> 'f -> r arg * r device
-    =
+type ('v, 'r) device =
+  | Device : ('v, 'f, 'r) args * 'f * 'r Hmap.key -> ('v, 'r) device
+
+let const v = Const v
+let value (Device (_, _, key)) = Value key
+let map args fn = Map (args, fn)
+
+let device : type v f r.
+    name:string -> finally:(r -> unit) -> (v, f, r) args -> f -> (v, r) device =
  fun ~name ~finally args fn ->
-  let initialize devices =
-    let k devices v = (devices, v) in
-    keval_args devices k args fn
+  let key : r Hmap.key = Hmap.Key.create { name; finally } in
+  Device (args, fn, key)
+
+let run : type v. t -> v -> (v, 'r) device -> t =
+ fun devices user's_value (Device (args, fn, key)) ->
+  let v = ref None in
+  let k fn devices =
+    v := Some devices;
+    fn user's_value
   in
-  let device = Device.make ~initialize ~finally name in
-  let key = Hmap.Key.create device in
-  (Value key, key)
+  let x = keval_args devices user's_value k args fn in
+  let[@warning "-8"] (Devices t) = Option.get !v in
+  Devices (Hmap.add key x t)
