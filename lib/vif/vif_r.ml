@@ -1,3 +1,7 @@
+let src = Logs.Src.create "vif.r"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 type 'a atom = 'a Tyre.Internal.wit
 
 let atom re = Tyre.Internal.build re
@@ -177,15 +181,15 @@ let rec extract_path : type f x r.
       let k f = k (f v) in
       extract_path ~original rep subs k
 
-let rec extract_query : type x r.
-    original:string -> (x, r) query -> Re.Group.t -> x -> r =
- fun ~original wq subs f ->
+let rec extract_query : type f x r.
+    original:string -> (f, r) query -> Re.Group.t -> f -> r =
+ fun ~original wq subs k ->
   match wq with
-  | Nil -> f
-  | Any -> f
+  | Nil -> k
+  | Any -> k
   | Cons (rea, req) ->
       let v = extract ~original rea subs in
-      extract_query ~original req subs (f v)
+      extract_query ~original req subs (k v)
 
 let extract : type r f. original:string -> (f, r) t -> Re.Group.t -> f -> r =
  fun ~original (Url (wp, wq)) subs f ->
@@ -202,37 +206,61 @@ let extract t =
     extract ~original:target url subs f
 *)
 
-type 'r route = Route : ('f, 'r) Vif_u.t * 'f -> 'r route
+type ('fu, 'return) body =
+  | Body :
+      ('c, 'a) Vif_content_type.t
+      -> (('c, 'a) Vif_request.t -> 'r, 'r) body
 
-let route t f = Route (t, f)
-let ( --> ) = route
+type 'r route = Route : ('f, 'x) body * ('x, 'r) Vif_u.t * 'f -> 'r route
 
-type 'r re = Re : 'f * Re.Mark.t * ('f, 'r) t -> 'r re
+let route body t f = Route (body, t, f)
+
+type 'r re = Re : ('f, 'x) body * 'f * Re.Mark.t * ('x, 'r) t -> 'r re
 
 let rec build_info_list idx = function
   | [] -> ([], [])
-  | Route (t, f) :: l ->
+  | Route (b, t, f) :: l ->
       let idx, ret, re = url idx t in
       let rel, wl = build_info_list idx l in
       let id, re = Re.mark re in
-      (re :: rel, Re (f, id, ret) :: wl)
+      (re :: rel, Re (b, f, id, ret) :: wl)
 
-let rec find_and_trigger : type r.
-    original:string -> Re.Group.t -> r re list -> r =
- fun ~original subs -> function
-  | [] -> assert false
-  | Re (f, id, ret) :: l ->
-      if Re.Mark.test subs id then extract ~original ret subs f
-      else find_and_trigger ~original subs l
+type request = {
+    extract: 'c 'a. ('c, 'a) Vif_content_type.t -> ('c, 'a) Vif_request.t option
+}
 
-let dispatch : type r.
-    default:(string -> r) -> r route list -> target:string -> r =
+let rec find_and_trigger : type f r a.
+    original:string -> request:request -> Re.Group.t -> r re list -> r =
+ fun ~original ~request subs -> function
+  | [] -> raise Not_found
+  | Re (Body body, f, id, ret) :: l ->
+      if Re.Mark.test subs id then
+        match request.extract body with
+        | Some request -> extract ~original ret subs (f request)
+        | None -> find_and_trigger ~original ~request subs l
+      else find_and_trigger ~original ~request subs l
+
+let dispatch : type f r c a.
+       default:((c, string) Vif_request.t -> string -> r)
+    -> r route list
+    -> request:request
+    -> target:string
+    -> r =
  fun ~default l ->
   let rel, wl = build_info_list 1 l in
   let re = Re.(compile (whole_string (alt rel))) in
-  fun ~target ->
+  fun ~request ~target ->
     match Re.exec_opt re target with
-    | None -> default target
-    | Some subs -> (
-        try find_and_trigger ~original:target subs wl
-        with Not_found -> assert false)
+    | None ->
+        Log.debug (fun m -> m "Fallback to the default route");
+        let[@warning "-8"] (Some request) = request.extract Any in
+        default request target
+    | Some subs -> begin
+        try find_and_trigger ~original:target ~request subs wl
+        with exn ->
+          Log.debug (fun m ->
+              m "Fallback to the default route (exn: %s)"
+                (Printexc.to_string exn));
+          let[@warning "-8"] (Some request) = request.extract Any in
+          default request target
+      end

@@ -3,4 +3,11 @@
  (public_name vif)
  (flags
   (:standard -linkall))
- (libraries hmap mirage-crypto-rng-miou-unix httpcats tyre))
+ (libraries
+  json-data-encoding
+  multipart_form
+  jsonm
+  hmap
+  mirage-crypto-rng-miou-unix
+  httpcats
+  tyre))

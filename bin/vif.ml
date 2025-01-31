@@ -28,9 +28,7 @@ let run _quiet roots stdlib main =
     in
     go []
   in
-  match Vif_top.eval cfg main with
-  | Ok sstr -> List.iter print_endline sstr
-  | Error sstr -> List.iter prerr_endline sstr
+  match Vif_top.eval cfg main with Ok () -> () | Error () -> exit 1
 
 open Cmdliner
 

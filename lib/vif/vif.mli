@@ -22,12 +22,75 @@ module U : sig
   val eval : ('f, string) t -> 'f
 end
 
+module Stream : sig
+  type 'a t
+
+  val create : int -> 'a t
+  val put : 'a t -> 'a -> unit
+  val get : 'a t -> 'a option
+  val close : 'a t -> unit
+end
+
+module Headers : sig
+  type t = (string * string) list
+end
+
+module Method : sig
+  type t =
+    [ `CONNECT
+    | `DELETE
+    | `GET
+    | `HEAD
+    | `OPTIONS
+    | `POST
+    | `PUT
+    | `TRACE
+    | `Other of string ]
+end
+
+module Json = Json
+
+module Content_type : sig
+  type null
+  type json
+  type ('c, 'a) t
+
+  val null : (null, unit) t
+  val json : (json, Json.t) t
+  val json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
+  val any : ('c, string) t
+end
+
+module Request : sig
+  type ('c, 'a) t
+
+  val target : ('c, 'a) t -> string
+  val meth : ('c, 'a) t -> Method.t
+  val version : ('c, 'a) t -> int
+  val headers : ('c, 'a) t -> Headers.t
+  val to_string : ('c, 'a) t -> string
+  val to_stream : ('c, 'a) t -> string Stream.t
+  val to_json : (Content_type.json, 'a) t -> ('a, [> `Msg of string ]) result
+end
+
 module R : sig
   type 'r route
+  type ('fu, 'return) t
+  type request
 
-  val route : ('f, 'r) U.t -> 'f -> 'r route
-  val ( --> ) : ('f, 'r) U.t -> 'f -> 'r route
-  val dispatch : default:(string -> 'r) -> 'r route list -> target:string -> 'r
+  val get : ('x, 'r) U.t -> ((Content_type.null, unit) Request.t -> 'x, 'r) t
+
+  val post :
+    ('c, 'a) Content_type.t -> ('x, 'r) U.t -> (('c, 'a) Request.t -> 'x, 'r) t
+
+  val ( --> ) : ('f, 'r) t -> 'f -> 'r route
+
+  val dispatch :
+       default:(('c, string) Request.t -> string -> 'r)
+    -> 'r route list
+    -> request:request
+    -> target:string
+    -> 'r
 end
 
 module C : sig
@@ -112,28 +175,6 @@ module S : sig
   val device : ('value, 'a) D.device -> t -> 'a
 end
 
-module Stream : sig
-  type 'a t
-
-  val create : int -> 'a t
-  val put : 'a t -> 'a -> unit
-  val get : 'a t -> 'a option
-  val close : 'a t -> unit
-end
-
-module Method : sig
-  type t =
-    [ `CONNECT
-    | `DELETE
-    | `GET
-    | `HEAD
-    | `OPTIONS
-    | `POST
-    | `PUT
-    | `TRACE
-    | `Other of string ]
-end
-
 module Status : sig
   type t =
     [ `Accepted
@@ -187,28 +228,13 @@ module Status : sig
     | `Use_proxy ]
 end
 
-module Headers : sig
-  type t = (string * string) list
-end
-
-module Request : sig
-  type t
-
-  val target : t -> string
-  val meth : t -> Method.t
-  val version : t -> int
-  val headers : t -> Headers.t
-  val to_string : t -> string
-  val to_stream : t -> string Stream.t
-end
-
 module Response : sig
   type t
 
   val with_stream :
-    S.t -> ?headers:Headers.t -> Status.t -> (string Stream.t -> unit) -> unit
+    S.t -> ?headers:Headers.t -> Status.t -> (string Stream.t -> unit) -> t
 
-  val with_string : S.t -> ?headers:Headers.t -> Status.t -> string -> unit
+  val with_string : S.t -> ?headers:Headers.t -> Status.t -> string -> t
 end
 
 type config
@@ -230,7 +256,7 @@ val stop : unit -> stop
 val run :
      cfg:config
   -> devices:'value Ds.t
-  -> default:(string -> S.t -> Request.t -> 'value -> unit)
-  -> (S.t -> Request.t -> 'value -> unit) R.route list
+  -> default:(('c, string) Request.t -> string -> S.t -> 'value -> Response.t)
+  -> (S.t -> 'value -> Response.t) R.route list
   -> 'value
   -> unit

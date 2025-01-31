@@ -1,17 +1,24 @@
-type t = {
+let src = Logs.Src.create "vif.request"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
+type ('c, 'a) t = {
     request: [ `V1 of H1.Request.t | `V2 of H2.Request.t ]
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
+  ; encoding: ('c, 'a) Vif_content_type.t
 }
 
-let of_reqd = function
+let of_reqd : type c a.
+    encoding:(c, a) Vif_content_type.t -> Httpcats.Server.reqd -> (c, a) t =
+ fun ~encoding -> function
   | `V1 reqd ->
       let request = `V1 (H1.Reqd.request reqd) in
       let body = `V1 (H1.Reqd.request_body reqd) in
-      { request; body }
+      { request; body; encoding }
   | `V2 reqd ->
       let request = `V2 (H2.Reqd.request reqd) in
       let body = `V2 (H2.Reqd.request_body reqd) in
-      { request; body }
+      { request; body; encoding }
 
 let target { request; _ } =
   match request with
@@ -70,3 +77,31 @@ let to_stream { body; _ } =
   | `V2 body ->
       to_stream ~schedule:H2.Body.Reader.schedule_read
         ~close:H2.Body.Reader.close body
+
+let destruct : type a. a Json_encoding.encoding -> Json.t -> a =
+  Json_encoding.destruct
+
+let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
+
+let to_json : type a.
+    (Vif_content_type.json, a) t -> (a, [> `Msg of string ]) result = function
+  | { encoding= Any; _ } as req -> Ok (to_string req)
+  | { encoding= Json; _ } as req ->
+      Log.debug (fun m -> m "Parse the body as a JSON data");
+      let stream = to_stream req in
+      Log.debug (fun m -> m "Get the stream");
+      let input () =
+        let str = Stream.get stream in
+        Log.debug (fun m -> m "json(%a)" Fmt.(option (fmt "%S")) str);
+        str
+      in
+      Json.decode ~input Result.ok
+  | { encoding= Json_encoding encoding; _ } as req -> (
+      let stream = to_stream req in
+      let input () = Stream.get stream in
+      match Json.decode ~input Result.ok with
+      | Error (`Msg _) as err -> err
+      | Ok (json : Json.t) -> (
+          try Ok (destruct encoding json)
+          with Json_encoding.Cannot_destruct (_, _) ->
+            error_msgf "Invalid JSON value"))

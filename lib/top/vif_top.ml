@@ -217,7 +217,7 @@ let eval _cfg ppf ph =
         false
     end
 
-let redirect : fn:(capture:(Buffer.t -> unit) -> 'a) -> 'a =
+let _redirect : fn:(capture:(Buffer.t -> unit) -> 'a) -> 'a =
  fun ~fn ->
   let filename = Filename.temp_file "vif-" ".stdout" in
   Log.debug (fun m -> m "redirect stdout/stderr into %s" filename);
@@ -273,7 +273,7 @@ let trim str =
 
 let rec ltrim = function "" :: r -> ltrim r | lst -> lst
 let rtrim lst = List.rev (ltrim (List.rev lst))
-let trim lst = ltrim (rtrim (List.map trim lst))
+let _trim lst = ltrim (rtrim (List.map trim lst))
 
 let rec ends_by_semi_semi = function
   | [] -> false
@@ -293,23 +293,13 @@ let cut_into_phrases lst =
   go [] [] lst
 
 let eval cfg cmd =
-  let buf = Buffer.create 0x7ff in
   let ppf = Format.formatter_of_out_channel stderr in
   errors := false;
-  let eval ~capture phrase =
-    let lines = ref [] in
-    let capture () =
-      capture buf;
-      match Buffer.contents buf with
-      | "" -> ()
-      | str ->
-          Buffer.clear buf;
-          lines := str :: !lines
-    in
+  let eval phrase =
     let out_phrase = !Oprint.out_phrase in
     let fn_out_phrase ppf = function
       | Outcometree.Ophr_exception _ as phr -> out_phrase ppf phr
-      | phr -> capture (); out_phrase ppf phr; capture ()
+      | phr -> out_phrase ppf phr
     in
     Oprint.out_phrase := fn_out_phrase;
     let restore () = Oprint.out_phrase := out_phrase in
@@ -323,25 +313,15 @@ let eval cfg cmd =
           restore ();
           Location.report_exception ppf exn
     end;
-    Format.pp_print_flush ppf ();
-    capture ();
-    trim (List.rev !lines)
+    Format.pp_print_flush ppf ()
   in
-  let fn ~capture =
-    capture_compiler_stuff ppf @@ fun () ->
-    let cmd =
-      match cmd with [] | [ _ ] -> cmd | x :: r -> x :: List.map (( ^ ) " ") r
-    in
-    let phrases = cut_into_phrases cmd in
-    let phrases =
-      List.map
-        (fun phrase ->
-          match Phrase.parse phrase with
-          | Some t -> eval ~capture t
-          | None -> [])
-        phrases
-    in
-    let phrases = List.concat phrases in
-    if !errors then Error phrases else Ok phrases
+  capture_compiler_stuff ppf @@ fun () ->
+  let cmd =
+    match cmd with [] | [ _ ] -> cmd | x :: r -> x :: List.map (( ^ ) " ") r
   in
-  redirect ~fn
+  let phrases = cut_into_phrases cmd in
+  List.iter
+    (fun phrase ->
+      match Phrase.parse phrase with Some t -> eval t | None -> ())
+    phrases;
+  if !errors then Error () else Ok ()
