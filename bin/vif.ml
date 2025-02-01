@@ -1,3 +1,5 @@
+let () = Logs_threaded.enable ()
+
 let _reporter ppf =
   let report src level ~over k msgf =
     let k _ = over (); k () in
@@ -14,7 +16,7 @@ let _reporter ppf =
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
-let run _quiet roots stdlib main =
+let run _quiet () roots stdlib main =
   let roots = List.map Fpath.to_string roots in
   let cfg = Vif_top.config ~stdlib roots in
   let main =
@@ -148,7 +150,7 @@ let setup_logs = Term.(const setup_logs $ utf_8 $ renderer $ verbosity)
 
 let term =
   let open Term in
-  const run $ setup_logs $ Vif_meta.setup $ setup_stdlib $ main
+  const run $ setup_logs $ Vif.setup_config $ Vif_meta.setup $ setup_stdlib $ main
 
 let cmd =
   let doc = "vif" in

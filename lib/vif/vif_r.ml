@@ -181,7 +181,7 @@ let rec extract_path : type f x r.
       let k f = k (f v) in
       extract_path ~original rep subs k
 
-let rec extract_query : type f x r.
+let rec extract_query : type f r.
     original:string -> (f, r) query -> Re.Group.t -> f -> r =
  fun ~original wq subs k ->
   match wq with
@@ -229,7 +229,7 @@ type request = {
     extract: 'c 'a. ('c, 'a) Vif_content_type.t -> ('c, 'a) Vif_request.t option
 }
 
-let rec find_and_trigger : type f r a.
+let rec find_and_trigger : type r.
     original:string -> request:request -> Re.Group.t -> r re list -> r =
  fun ~original ~request subs -> function
   | [] -> raise Not_found
@@ -240,7 +240,7 @@ let rec find_and_trigger : type f r a.
         | None -> find_and_trigger ~original ~request subs l
       else find_and_trigger ~original ~request subs l
 
-let dispatch : type f r c a.
+let dispatch : type r c.
        default:((c, string) Vif_request.t -> string -> r)
     -> r route list
     -> request:request

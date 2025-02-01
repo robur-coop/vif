@@ -122,7 +122,6 @@ let to_dir_path = Vif_meta.to_dir_path
 
 let load cfg str =
   let ( let* ) = Result.bind in
-  Log.debug (fun m -> m "load: %s" str);
   let* path = Vif_meta.Path.of_string str in
   let* deps =
     Vif_meta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path
@@ -165,7 +164,7 @@ let load cfg str =
 
 let init cfg =
   let ppf = Fmt.stderr in
-  Sys.interactive := false;
+  Sys.interactive := true;
   Clflags.native_code := true;
   Clflags.debug := true;
   Topcommon.update_search_path_from_env ();

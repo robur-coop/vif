@@ -238,7 +238,6 @@ module Response : sig
 end
 
 type config
-and stop
 
 val config :
      ?http:
@@ -247,16 +246,17 @@ val config :
        | `Both of H1.Config.t * H2.Config.t ]
   -> ?tls:Tls.Config.server
   -> ?backlog:int
-  -> ?stop:stop
   -> Unix.sockaddr
   -> config
 
-val stop : unit -> stop
-
 val run :
-     cfg:config
-  -> devices:'value Ds.t
+     ?cfg:config
+  -> ?devices:'value Ds.t
   -> default:(('c, string) Request.t -> string -> S.t -> 'value -> Response.t)
   -> (S.t -> 'value -> Response.t) R.route list
   -> 'value
   -> unit
+
+(**/*)
+
+val setup_config : unit Cmdliner.Term.t

@@ -44,7 +44,7 @@ let rec arg : type a v. t -> v -> (v, a) arg -> t * a =
       let value = keval_args devices user's_value k args fn in
       (Option.get !v, value)
 
-and keval_args : type f r v a.
+and keval_args : type f r v.
     t -> v -> ((v -> r) -> t -> r) -> (v, f, r) args -> f -> r =
  fun devices user's_value k -> function
   | [] -> fun fn -> k fn devices

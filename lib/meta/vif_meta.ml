@@ -1,4 +1,4 @@
-let src = Logs.Src.create "uniq.meta"
+let src = Logs.Src.create "vif.meta"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -350,9 +350,7 @@ exception Cycle
 let get_dep (_, path, descr) graph =
   let deps = dependencies_of (path, descr) in
   List.map
-    (fun name ->
-      Log.debug (fun m -> m "search %a" Path.pp name);
-      List.find (fun (name', _, _) -> Path.equal name name') graph)
+    (fun name -> List.find (fun (name', _, _) -> Path.equal name name') graph)
     deps
 
 type graph = (Path.t * string * Assoc.t) list
@@ -401,12 +399,9 @@ let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
     | [] -> Ok acc
     | meta_path :: todo when List.mem meta_path visited -> go acc visited todo
     | meta_path :: todo -> (
-        Log.debug (fun m -> m "search %a" Path.pp meta_path);
         match search ~roots ~predicates meta_path with
         | Ok pkgs ->
             let requires = List.concat (List.map dependencies_of pkgs) in
-            Log.debug (fun m ->
-                m "search @[<hov>%a@]" Fmt.(Dump.list Path.pp) requires);
             let pkgs =
               List.map (fun (path, descr) -> (meta_path, path, descr)) pkgs
             in
@@ -415,12 +410,7 @@ let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
         | Error _ as err -> err)
   in
   let open Rresult in
-  go [] [] [ meta_path ] >>| fun lst ->
-  Log.debug (fun m ->
-      m "%a requires: %a" Path.pp meta_path
-        Fmt.(Dump.list Path.pp)
-        (List.map (fun (x, _, _) -> x) lst));
-  sort lst |> List.rev
+  go [] [] [ meta_path ] >>| fun lst -> sort lst |> List.rev
 
 let to_artifacts pkgs =
   let ( let* ) = Result.bind in

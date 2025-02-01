@@ -52,32 +52,6 @@ module Headers = Vif_headers
 module Request = Vif_request
 module Response = Vif_response
 
-type stop = Httpcats.Server.stop
-
-type config = {
-    http:
-      [ `HTTP_1_1 of H1.Config.t
-      | `H2 of H2.Config.t
-      | `Both of H1.Config.t * H2.Config.t ]
-      option
-  ; tls: Tls.Config.server option
-  ; backlog: int
-  ; stop: stop option
-  ; sockaddr: Unix.sockaddr
-}
-
-let config ?http ?tls ?(backlog = 64) ?stop sockaddr =
-  let http =
-    match http with
-    | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
-    | Some (`H2 cfg) -> Some (`H2 cfg)
-    | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
-    | None -> None
-  in
-  { http; tls; backlog; stop; sockaddr }
-
-let stop = Httpcats.Server.stop
-
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
 
@@ -136,7 +110,7 @@ let request server =
   in
   { Vif_r.extract }
 
-let handler ~default routes devices user's_value socket reqd =
+let handler ~default routes devices user's_value = (); fun socket reqd ->
   let target =
     match reqd with
     | `V1 reqd -> (H1.Reqd.request reqd).H1.Request.target
@@ -148,27 +122,51 @@ let handler ~default routes devices user's_value socket reqd =
   let fn = R.dispatch ~default routes ~request ~target in
   match fn server user's_value with Vif_response.Response -> ()
 
-let run ~cfg ~devices ~default routes user's_value =
+type config = Vif_config.config
+
+let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
+let config = Vif_config.config
+
+let handle stop cfg fn =
+  Logs.debug (fun m ->
+      m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
+  match (cfg.Vif_config.http, cfg.Vif_config.tls) with
+  | config, Some tls ->
+      Httpcats.Server.with_tls ?stop ?config ~backlog:cfg.backlog tls ~handler:fn
+        cfg.sockaddr
+  | Some (`H2 _), None ->
+      failwith "Impossible to launch an h2 server without TLS."
+  | Some (`Both (config, _) | `HTTP_1_1 config), None ->
+      Httpcats.Server.clear ?stop ~config ~handler:fn cfg.sockaddr
+  | None, None ->
+      Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
+      Httpcats.Server.clear ?stop ~handler:fn cfg.sockaddr
+
+let run ?(cfg= Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default routes user's_value =
+  let interactive = !Sys.interactive in
   let domains = Miou.Domain.available () in
-  let handle =
-   fun handler ->
-    match (cfg.http, cfg.tls) with
-    | config, Some tls ->
-        Httpcats.Server.with_tls ?stop:cfg.stop ?config ~backlog:cfg.backlog tls
-          ~handler cfg.sockaddr
-    | Some (`H2 _), None ->
-        failwith "Impossible to launch an h2 server without TLS."
-    | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-        Httpcats.Server.clear ?stop:cfg.stop ~config ~handler cfg.sockaddr
-    | None, None -> Httpcats.Server.clear ?stop:cfg.stop ~handler cfg.sockaddr
+  let stop =
+    match interactive with
+    | true ->
+        let stop = Httpcats.Server.stop () in
+        let fn _sigint = Httpcats.Server.switch stop in
+        let behavior = Sys.Signal_handle fn in
+        ignore (Miou.sys_signal Sys.sigint behavior);
+        Some stop
+    | false -> None
   in
+  Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let[@warning "-8"] (Vif_d.Devices devices) =
     Ds.run Vif_d.empty devices user's_value
   in
-  let handler = handler ~default routes devices user's_value in
-  let prm = Miou.async @@ fun () -> handle handler in
-  if domains > 0 then
-    Miou.parallel handle (List.init domains (Fun.const handler))
-    |> List.iter (function Ok () -> () | Error exn -> raise exn);
+  Logs.debug (fun m -> m "devices launched");
+  let fn0 = handler ~default routes devices user's_value in
+  let prm = Miou.async @@ fun () -> handle stop cfg fn0 in
+  let tasks = List.init domains (fun _ -> handler ~default routes devices user's_value) in
+  let tasks = if domains > 0 then Miou.parallel (handle stop cfg) tasks else [] in
   Miou.await_exn prm;
-  Ds.finally (Vif_d.Devices devices)
+  List.iter (function Ok () -> () | Error exn -> raise exn) tasks;
+  Ds.finally (Vif_d.Devices devices);
+  Log.debug (fun m -> m "Vif (and devices) terminated")
+
+let setup_config = Vif_options.setup_config
