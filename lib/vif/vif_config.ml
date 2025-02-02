@@ -7,9 +7,10 @@ type config = {
   ; tls: Tls.Config.server option
   ; backlog: int
   ; sockaddr: Unix.sockaddr
+  ; pid: Fpath.t option
 }
 
-let config ?http ?tls ?(backlog = 64) sockaddr =
+let config ?pid ?http ?tls ?(backlog = 64) sockaddr =
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
@@ -17,4 +18,4 @@ let config ?http ?tls ?(backlog = 64) sockaddr =
     | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
     | None -> None
   in
-  { http; tls; backlog; sockaddr }
+  { http; tls; backlog; sockaddr; pid }

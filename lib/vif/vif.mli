@@ -240,7 +240,8 @@ end
 type config
 
 val config :
-     ?http:
+     ?pid:Fpath.t
+  -> ?http:
        [ `H1 of H1.Config.t
        | `H2 of H2.Config.t
        | `Both of H1.Config.t * H2.Config.t ]

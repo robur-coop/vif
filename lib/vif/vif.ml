@@ -158,10 +158,18 @@ let handle stop cfg fn =
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
       Httpcats.Server.clear ?stop ~handler:fn cfg.sockaddr
 
+let store_pid = function
+  | None -> ()
+  | Some v ->
+      let oc = open_out (Fpath.to_string v) in
+      output_string oc (string_of_int (Unix.getpid ()));
+      close_out oc
+
 let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default
     routes user's_value =
   let interactive = !Sys.interactive in
   let domains = Miou.Domain.available () in
+  store_pid cfg.pid;
   let stop =
     match interactive with
     | true ->
