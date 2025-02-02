@@ -25,8 +25,8 @@ let with_string server ?headers:(hdrs = []) status str =
         match status with
         | #H1.Status.t as status -> status
         | status ->
-           Log.err (fun m -> m "Invalid status: %a" H2.Status.pp_hum status);
-           invalid_arg "Response.with_string: invalid status"
+            Log.err (fun m -> m "Invalid status: %a" H2.Status.pp_hum status);
+            invalid_arg "Response.with_string: invalid status"
       in
       let resp = H1.Response.create ~headers:hdrs status in
       H1.Reqd.respond_with_string reqd resp str;

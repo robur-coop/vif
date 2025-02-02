@@ -1,4 +1,4 @@
-let src = Logs.Src.create "uniq.info"
+let src = Logs.Src.create "vif.top.info"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 

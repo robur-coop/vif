@@ -9,11 +9,11 @@ module R = struct
   open Vif_content_type
 
   type ('fu, 'return) t =
-    | Handler : ('f, 'x) body * ('x, 'r) Vif_u.t -> ('f, 'r) t
+    | Handler : ('f, 'x) Vif_r.req * ('x, 'r) Vif_u.t -> ('f, 'r) t
 
-  let get t = Handler (Body Null, t)
-  let post body t = Handler (Body body, t)
-  let route (Handler (body, t)) f = Route (body, t, f)
+  let get t = Handler (Request (Some `GET, Null), t)
+  let post c t = Handler (Request (Some `POST, c), t)
+  let route (Handler (req, t)) f = Route (req, t, f)
   let ( --> ) = route
 end
 
@@ -55,72 +55,88 @@ module Response = Vif_response
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
 
+let content_type server =
+  let headers =
+    match server.S.reqd with
+    | `V1 reqd ->
+        let request = H1.Reqd.request reqd in
+        H1.Headers.to_list request.H1.Request.headers
+    | `V2 reqd ->
+        let request = H2.Reqd.request reqd in
+        H2.Headers.to_list request.H2.Request.headers
+  in
+  let c = List.assoc_opt "content-type" headers in
+  let c = Option.map (fun c -> c ^ "\r\n") c in
+  let c = Option.to_result ~none:`Not_found c in
+  Result.bind c Multipart_form.Content_type.of_string
+
+let method_of_request server =
+  match server.S.reqd with
+  | `V1 reqd -> ((H1.Reqd.request reqd).H1.Request.meth :> H2.Method.t)
+  | `V2 reqd -> ((H2.Reqd.request reqd).H2.Request.meth :> H2.Method.t)
+
 let request server =
   let extract : type c a.
-      (c, a) Vif_content_type.t -> (c, a) Vif_request.t option = function
-    | Vif_content_type.Any as encoding ->
+         Vif_method.t option
+      -> (c, a) Vif_content_type.t
+      -> (c, a) Vif_request.t option =
+   fun meth c ->
+    let meth' = method_of_request server in
+    match (meth, meth', c) with
+    | None, _, (Vif_content_type.Any as encoding) ->
         Some (Vif_request.of_reqd ~encoding server.S.reqd)
-    | Null as encoding -> Some (Vif_request.of_reqd ~encoding server.S.reqd)
-    | Json_encoding _ as encoding ->
-        let headers =
-          match server.S.reqd with
-          | `V1 reqd ->
-              let request = H1.Reqd.request reqd in
-              H1.Headers.to_list request.H1.Request.headers
-          | `V2 reqd ->
-              let request = H2.Reqd.request reqd in
-              H2.Headers.to_list request.H2.Request.headers
-        in
-        let c = List.assoc_opt "content-type" headers in
-        let c = Option.map (fun c -> c ^ "\r\n") c in
-        let c = Option.to_result ~none:`Not_found c in
-        let c = Result.bind c Multipart_form.Content_type.of_string in
-        begin
-          match c with
-          | Ok c when is_application_json c ->
-              Some (Vif_request.of_reqd ~encoding server.S.reqd)
-          | _ -> None
-        end
-    | Json as encoding ->
-        let headers =
-          match server.S.reqd with
-          | `V1 reqd ->
-              let request = H1.Reqd.request reqd in
-              H1.Headers.to_list request.H1.Request.headers
-          | `V2 reqd ->
-              let request = H2.Reqd.request reqd in
-              H2.Headers.to_list request.H2.Request.headers
-        in
-        let c = List.assoc_opt "content-type" headers in
-        let c = Option.map (fun c -> c ^ "\r\n") c in
-        let c = Option.to_result ~none:`Not_found c in
-        let c = Result.bind c Multipart_form.Content_type.of_string in
-        Log.debug (fun m ->
-            m "content-type: %a"
-              Fmt.(
-                Dump.result ~ok:Multipart_form.Content_type.pp
-                  ~error:(any "#errored"))
-              c);
-        begin
-          match c with
-          | Ok c when is_application_json c ->
-              Some (Vif_request.of_reqd ~encoding server.S.reqd)
-          | _ -> None
-        end
+    | Some a, b, (Vif_content_type.Any as encoding) ->
+        if a = b then Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
+    | None, _, (Null as encoding) ->
+        Some (Vif_request.of_reqd ~encoding server.S.reqd)
+    | Some a, b, (Null as encoding) ->
+        if a = b then Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
+    | None, _, (Json_encoding _ as encoding) ->
+        let c = content_type server in
+        let application_json = Result.map is_application_json c in
+        let application_json = Result.value ~default:false application_json in
+        if application_json then
+          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
+    | Some a, b, (Json_encoding _ as encoding) ->
+        let c = content_type server in
+        let application_json = Result.map is_application_json c in
+        let application_json = Result.value ~default:false application_json in
+        if application_json && a = b then
+          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
+    | None, _, (Json as encoding) ->
+        let c = content_type server in
+        let application_json = Result.map is_application_json c in
+        let application_json = Result.value ~default:false application_json in
+        if application_json then
+          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
+    | Some a, b, (Json as encoding) ->
+        let c = content_type server in
+        let application_json = Result.map is_application_json c in
+        let application_json = Result.value ~default:false application_json in
+        if application_json && a = b then
+          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        else None
   in
   { Vif_r.extract }
 
-let handler ~default routes devices user's_value = (); fun socket reqd ->
-  let target =
-    match reqd with
-    | `V1 reqd -> (H1.Reqd.request reqd).H1.Request.target
-    | `V2 reqd -> (H2.Reqd.request reqd).H2.Request.target
-  in
-  let server = { Vif_s.reqd; socket; devices } in
-  let request = request server in
-  Log.debug (fun m -> m "Handle a new request to %s" target);
-  let fn = R.dispatch ~default routes ~request ~target in
-  match fn server user's_value with Vif_response.Response -> ()
+let handler ~default routes devices user's_value =
+  ();
+  fun socket reqd ->
+    let target =
+      match reqd with
+      | `V1 reqd -> (H1.Reqd.request reqd).H1.Request.target
+      | `V2 reqd -> (H2.Reqd.request reqd).H2.Request.target
+    in
+    let server = { Vif_s.reqd; socket; devices } in
+    let request = request server in
+    Log.debug (fun m -> m "Handle a new request to %s" target);
+    let fn = R.dispatch ~default routes ~request ~target in
+    match fn server user's_value with Vif_response.Response -> ()
 
 type config = Vif_config.config
 
@@ -132,8 +148,8 @@ let handle stop cfg fn =
       m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
   match (cfg.Vif_config.http, cfg.Vif_config.tls) with
   | config, Some tls ->
-      Httpcats.Server.with_tls ?stop ?config ~backlog:cfg.backlog tls ~handler:fn
-        cfg.sockaddr
+      Httpcats.Server.with_tls ?stop ?config ~backlog:cfg.backlog tls
+        ~handler:fn cfg.sockaddr
   | Some (`H2 _), None ->
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
@@ -142,7 +158,8 @@ let handle stop cfg fn =
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
       Httpcats.Server.clear ?stop ~handler:fn cfg.sockaddr
 
-let run ?(cfg= Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default routes user's_value =
+let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default
+    routes user's_value =
   let interactive = !Sys.interactive in
   let domains = Miou.Domain.available () in
   let stop =
@@ -162,8 +179,12 @@ let run ?(cfg= Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default r
   Logs.debug (fun m -> m "devices launched");
   let fn0 = handler ~default routes devices user's_value in
   let prm = Miou.async @@ fun () -> handle stop cfg fn0 in
-  let tasks = List.init domains (fun _ -> handler ~default routes devices user's_value) in
-  let tasks = if domains > 0 then Miou.parallel (handle stop cfg) tasks else [] in
+  let tasks =
+    List.init domains (fun _ -> handler ~default routes devices user's_value)
+  in
+  let tasks =
+    if domains > 0 then Miou.parallel (handle stop cfg) tasks else []
+  in
   Miou.await_exn prm;
   List.iter (function Ok () -> () | Error exn -> raise exn) tasks;
   Ds.finally (Vif_d.Devices devices);

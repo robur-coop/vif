@@ -1,5 +1,4 @@
 let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-
 let port = ref 8080
 let inet_addr = ref Unix.inet_addr_loopback
 let backlog = ref 64
@@ -24,14 +23,19 @@ let inet_addr =
   let doc = "The address to bind the HTTP server." in
   let parser str =
     try Ok (Unix.inet_addr_of_string str)
-    with _ -> error_msgf "Invalid inet-addr: %S" str in
+    with _ -> error_msgf "Invalid inet-addr: %S" str
+  in
   let pp ppf inet_addr = Fmt.string ppf (Unix.string_of_inet_addr inet_addr) in
   let inet_addr = Arg.conv (parser, pp) in
   let open Arg in
-  value & opt inet_addr Unix.inet_addr_loopback & info [ "i"; "inet-addr" ] ~doc ~docv:"INET_ADDR"
+  value
+  & opt inet_addr Unix.inet_addr_loopback
+  & info [ "i"; "inet-addr" ] ~doc ~docv:"INET_ADDR"
 
 let backlog =
-  let doc = "The limit of outstanding connections in the socket's listen queue." in
+  let doc =
+    "The limit of outstanding connections in the socket's listen queue."
+  in
   let open Arg in
   value & opt int 64 & info [ "backlog" ] ~doc ~docv:"NUMBER"
 

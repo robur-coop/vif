@@ -157,7 +157,8 @@ let load cfg str =
       let fn artifact =
         let dir = Filename.dirname artifact in
         Topdirs.dir_directory dir;
-        try Topdirs.dir_load null artifact with _ -> ()
+        try Topdirs.dir_load null artifact
+        with exn -> Log.err (fun m -> m "exn: %s" (Printexc.to_string exn))
       in
       List.iter fn artifacts
   | Error (`Msg msg) -> Log.err (fun m -> m "Impossible to load %S: %s" str msg)

@@ -8,7 +8,4 @@ let default req target server () =
   Vif.Response.with_string server `OK (Fmt.str "%d request(s)\n" (succ v))
 ;;
 
-let () =
-  Miou_unix.run @@ fun () ->
-  Vif.run ~default [] ()
-;;
+let () = Miou_unix.run @@ fun () -> Vif.run ~default [] () ;;

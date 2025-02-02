@@ -4,16 +4,14 @@
 let rng =
   let open Mirage_crypto_rng_miou_unix in
   let finally = kill in
-  Vif.D.device ~name:"rng" ~finally [] @@ fun () ->
-  initialize (module Pfortuna)
+  Vif.D.device ~name:"rng" ~finally [] @@ fun () -> initialize (module Pfortuna)
 ;;
 
 type foo = Foo ;;
 
 let foo =
   let finally Foo = () in
-  Vif.D.device ~name:"foo" ~finally [] @@ fun () ->
-  Foo
+  Vif.D.device ~name:"foo" ~finally [] @@ fun () -> Foo
 ;;
 
 let default req target server () =
@@ -23,6 +21,5 @@ let default req target server () =
 ;;
 
 let () =
-  Miou_unix.run @@ fun () ->
-    Vif.run ~default ~devices:Vif.Ds.[ rng; foo ] [] ()
+  Miou_unix.run @@ fun () -> Vif.run ~default ~devices:Vif.Ds.[ rng; foo ] [] ()
 ;;

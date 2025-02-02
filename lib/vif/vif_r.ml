@@ -206,36 +206,40 @@ let extract t =
     extract ~original:target url subs f
 *)
 
-type ('fu, 'return) body =
-  | Body :
-      ('c, 'a) Vif_content_type.t
-      -> (('c, 'a) Vif_request.t -> 'r, 'r) body
+type ('fu, 'return) req =
+  | Request :
+      Vif_method.t option * ('c, 'a) Vif_content_type.t
+      -> (('c, 'a) Vif_request.t -> 'r, 'r) req
 
-type 'r route = Route : ('f, 'x) body * ('x, 'r) Vif_u.t * 'f -> 'r route
+type 'r route = Route : ('f, 'x) req * ('x, 'r) Vif_u.t * 'f -> 'r route
 
-let route body t f = Route (body, t, f)
+let route req t f = Route (req, t, f)
 
-type 'r re = Re : ('f, 'x) body * 'f * Re.Mark.t * ('x, 'r) t -> 'r re
+type 'r re = Re : ('f, 'x) req * 'f * Re.Mark.t * ('x, 'r) t -> 'r re
 
 let rec build_info_list idx = function
   | [] -> ([], [])
-  | Route (b, t, f) :: l ->
+  | Route (req, t, f) :: l ->
       let idx, ret, re = url idx t in
       let rel, wl = build_info_list idx l in
       let id, re = Re.mark re in
-      (re :: rel, Re (b, f, id, ret) :: wl)
+      (re :: rel, Re (req, f, id, ret) :: wl)
 
 type request = {
-    extract: 'c 'a. ('c, 'a) Vif_content_type.t -> ('c, 'a) Vif_request.t option
+    extract:
+      'c 'a.
+         Vif_method.t option
+      -> ('c, 'a) Vif_content_type.t
+      -> ('c, 'a) Vif_request.t option
 }
 
 let rec find_and_trigger : type r.
     original:string -> request:request -> Re.Group.t -> r re list -> r =
  fun ~original ~request subs -> function
   | [] -> raise Not_found
-  | Re (Body body, f, id, ret) :: l ->
+  | Re (Request (meth, c), f, id, ret) :: l ->
       if Re.Mark.test subs id then
-        match request.extract body with
+        match request.extract meth c with
         | Some request -> extract ~original ret subs (f request)
         | None -> find_and_trigger ~original ~request subs l
       else find_and_trigger ~original ~request subs l
@@ -253,7 +257,7 @@ let dispatch : type r c.
     match Re.exec_opt re target with
     | None ->
         Log.debug (fun m -> m "Fallback to the default route");
-        let[@warning "-8"] (Some request) = request.extract Any in
+        let[@warning "-8"] (Some request) = request.extract None Any in
         default request target
     | Some subs -> begin
         try find_and_trigger ~original:target ~request subs wl
@@ -261,6 +265,6 @@ let dispatch : type r c.
           Log.debug (fun m ->
               m "Fallback to the default route (exn: %s)"
                 (Printexc.to_string exn));
-          let[@warning "-8"] (Some request) = request.extract Any in
+          let[@warning "-8"] (Some request) = request.extract None Any in
           default request target
       end

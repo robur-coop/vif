@@ -85,10 +85,28 @@ let compile ~predicates t ks =
     in
     List.exists one ps
   in
-  let rec go acc t = function
+  let find_directory contents =
+    let rec go result = function
+      | [] -> result
+      | Add { name= "directory"; predicates= []; value } :: rest ->
+          if Option.is_none result then go (Some value) rest else go result rest
+      | Add { name= "directory"; predicates; value } :: rest ->
+          if incl predicates && Option.is_none result then go (Some value) rest
+          else go result rest
+      | Set { name= "directory"; predicates= []; value } :: rest ->
+          go (Some value) rest
+      | Set { name= "directory"; predicates; value } :: rest ->
+          if incl predicates then go (Some value) rest else go result rest
+      | _ :: rest -> go result rest
+    in
+    go None contents
+  in
+  let rec go ~directory acc t = function
     | [] ->
         let rec go acc = function
-          | [] -> acc
+          | [] ->
+              let acc = List.remove_assoc "directory" acc in
+              ("directory", [ directory ]) :: acc
           | Node _ :: rest -> go acc rest
           | Add { name; predicates= []; value } :: rest ->
               go (Assoc.add name value acc) rest
@@ -102,14 +120,21 @@ let compile ~predicates t ks =
               else go acc rest
         in
         go acc t
-    | k :: ks -> (
+    | k :: ks -> begin
         match t with
         | [] -> acc
         | Node { name= "package"; value; contents } :: rest ->
-            if k = value then go acc contents ks else go acc rest (k :: ks)
-        | _ :: rest -> go acc rest (k :: ks))
+            let directory' =
+              match find_directory contents with
+              | Some v -> Filename.concat directory v
+              | None -> directory
+            in
+            if k = value then go ~directory:directory' acc contents ks
+            else go ~directory acc rest (k :: ks)
+        | _ :: rest -> go ~directory acc rest (k :: ks)
+      end
   in
-  go [] t ks
+  go ~directory:"" [] t ks
 
 exception Parser_error of string
 
@@ -328,7 +353,11 @@ let search ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
       diff meta_path meta_path' >>= fun ks ->
       parser path >>| fun meta -> compile ~predicates meta ks
     with
-    | Ok descr -> Map.add (root / Filename.dirname rel) descr acc
+    | Ok descr ->
+        Log.debug (fun m -> m "add %s" (root / Filename.dirname rel));
+        Log.debug (fun m ->
+            m "%a" Fmt.(Dump.list (Dump.pair string (Dump.list string))) descr);
+        Map.add (root / Filename.dirname rel) descr acc
     | Error (`Msg msg) ->
         Log.warn (fun m ->
             m "Impossible to extract the META file of %s: %s" path msg);

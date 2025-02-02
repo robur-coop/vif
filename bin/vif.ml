@@ -150,7 +150,12 @@ let setup_logs = Term.(const setup_logs $ utf_8 $ renderer $ verbosity)
 
 let term =
   let open Term in
-  const run $ setup_logs $ Vif.setup_config $ Vif_meta.setup $ setup_stdlib $ main
+  const run
+  $ setup_logs
+  $ Vif.setup_config
+  $ Vif_meta.setup
+  $ setup_stdlib
+  $ main
 
 let cmd =
   let doc = "vif" in
