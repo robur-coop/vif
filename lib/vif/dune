@@ -9,6 +9,8 @@
   jsonm
   cmdliner
   hmap
+  decompress.zl
+  decompress.gz
   mirage-crypto-rng-miou-unix
   httpcats
   tyre))

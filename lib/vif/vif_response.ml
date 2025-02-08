@@ -40,35 +40,20 @@ let with_string server ?headers:(hdrs = []) status str =
       H2.Reqd.respond_with_string reqd resp str;
       Response
 
-let with_stream server ?headers:(hdrs = []) status fn =
-  match Vif_s.reqd server with
-  | `V1 reqd ->
-      let hdrs = Hdrs.add_unless_exists hdrs "transfer-encoding" "chunked" in
-      let hdrs = H1.Headers.of_list hdrs in
-      let status =
-        match status with
-        | #H1.Status.t as status -> status
-        | _ -> invalid_arg "Response.with_string: invalid status"
-      in
-      let resp = H1.Response.create ~headers:hdrs status in
-      let stream = Stream.create 0x7ff in
-      let body = H1.Reqd.respond_with_streaming reqd resp in
-      let res0 = Miou.Ownership.create ~finally:H1.Body.Writer.close body in
-      let res1 = Miou.Ownership.create ~finally:Stream.close stream in
-      let rec send stream body res =
-        match Stream.get stream with
-        | Some str ->
-            H1.Body.Writer.write_string body str;
-            send stream body res
-        | None -> H1.Body.Writer.close body; Miou.Ownership.disown res
-      in
-      let prm0 = Miou.async ~give:[ res0 ] @@ fun () -> send stream body res0 in
-      let prm1 =
-        Miou.async ~give:[ res1 ] @@ fun () ->
-        let () = fn stream in
-        Stream.close stream; Miou.Ownership.disown res1
-      in
-      Miou.await_all [ prm0; prm1 ]
-      |> List.iter (function Ok () -> () | Error exn -> raise exn);
-      Response
-  | `V2 _ -> assert false
+let with_stream ?compression server ?headers status stream =
+  let headers, stream =
+    match compression with
+    | None -> (headers, stream)
+    | Some `DEFLATE ->
+        let headers =
+          match headers with
+          | None -> Some [ ("content-encoding", "deflate") ]
+          | Some hdrs ->
+              Vif_headers.add_unless_exists hdrs "content-encoding" "deflate"
+              |> Option.some
+        in
+        (headers, Stream.Stream.via (Stream.Flow.deflate ()) stream)
+  in
+  let sink = Stream.Sink.response ?headers status server in
+  Stream.Stream.into sink stream;
+  Response

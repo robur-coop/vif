@@ -51,10 +51,10 @@ let to_string ~schedule ~close body =
   Miou.Computation.await_exn c
 
 let to_stream ~schedule ~close body =
-  let stream = Stream.create 0x7ff in
-  let rec on_eof () = close body; Stream.close stream
+  let stream = Stream.Bqueue.create 0x100 in
+  let rec on_eof () = close body; Stream.Bqueue.close stream
   and on_read bstr ~off ~len =
-    Stream.put stream (Bigstringaf.substring bstr ~off ~len);
+    Stream.Bqueue.put stream (Bigstringaf.substring bstr ~off ~len);
     schedule body ~on_eof ~on_read
   in
   schedule body ~on_eof ~on_read;
@@ -74,34 +74,31 @@ let to_stream { body; _ } =
   | `V1 body ->
       to_stream ~schedule:H1.Body.Reader.schedule_read
         ~close:H1.Body.Reader.close body
+      |> Stream.Stream.of_bqueue
   | `V2 body ->
       to_stream ~schedule:H2.Body.Reader.schedule_read
         ~close:H2.Body.Reader.close body
+      |> Stream.Stream.of_bqueue
 
 let destruct : type a. a Json_encoding.encoding -> Json.t -> a =
   Json_encoding.destruct
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
-let to_json : type a.
+let of_json : type a.
     (Vif_content_type.json, a) t -> (a, [> `Msg of string ]) result = function
   | { encoding= Any; _ } as req -> Ok (to_string req)
   | { encoding= Json; _ } as req ->
       Log.debug (fun m -> m "Parse the body as a JSON data");
       let stream = to_stream req in
-      Log.debug (fun m -> m "Get the stream");
-      let input () =
-        let str = Stream.get stream in
-        Log.debug (fun m -> m "json(%a)" Fmt.(option (fmt "%S")) str);
-        str
-      in
-      Json.decode ~input Result.ok
-  | { encoding= Json_encoding encoding; _ } as req -> (
+      Stream.Stream.into Stream.Sink.json stream
+  | { encoding= Json_encoding encoding; _ } as req -> begin
       let stream = to_stream req in
-      let input () = Stream.get stream in
-      match Json.decode ~input Result.ok with
+      match Stream.Stream.into Stream.Sink.json stream with
       | Error (`Msg _) as err -> err
-      | Ok (json : Json.t) -> (
+      | Ok (json : Json.t) -> begin
           try Ok (destruct encoding json)
           with Json_encoding.Cannot_destruct (_, _) ->
-            error_msgf "Invalid JSON value"))
+            error_msgf "Invalid JSON value"
+        end
+    end

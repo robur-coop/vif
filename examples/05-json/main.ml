@@ -24,7 +24,7 @@ let foo =
 ;;
 
 let deserialize req server () =
-  match Vif.Request.to_json req with
+  match Vif.Request.of_json req with
   | Ok (foo : foo) ->
       let str =
         Fmt.str "username: %s, password: %s, age: %a, address: %a\n"

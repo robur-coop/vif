@@ -6,7 +6,7 @@ type error = [ `Error of Jsonm.error ]
 type eoi = [ `End ]
 
 let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-let _max_young_size = Sys.word_size / 8 * 256
+let _max_young_size = 0x7ff
 
 let rec pp ppf = function
   | `Null -> Fmt.const Fmt.string "()" ppf ()

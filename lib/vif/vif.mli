@@ -22,14 +22,7 @@ module U : sig
   val eval : ('f, string) t -> 'f
 end
 
-module Stream : sig
-  type 'a t
-
-  val create : int -> 'a t
-  val put : 'a t -> 'a -> unit
-  val get : 'a t -> 'a option
-  val close : 'a t -> unit
-end
+module Stream = Stream
 
 module Headers : sig
   type t = (string * string) list
@@ -69,8 +62,8 @@ module Request : sig
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
   val to_string : ('c, 'a) t -> string
-  val to_stream : ('c, 'a) t -> string Stream.t
-  val to_json : (Content_type.json, 'a) t -> ('a, [> `Msg of string ]) result
+  val to_stream : ('c, 'a) t -> string Stream.stream
+  val of_json : (Content_type.json, 'a) t -> ('a, [ `Msg of string ]) result
 end
 
 module R : sig
@@ -232,7 +225,12 @@ module Response : sig
   type t
 
   val with_stream :
-    S.t -> ?headers:Headers.t -> Status.t -> (string Stream.t -> unit) -> t
+       ?compression:[ `DEFLATE ]
+    -> S.t
+    -> ?headers:Headers.t
+    -> Status.t
+    -> string Stream.stream
+    -> t
 
   val with_string : S.t -> ?headers:Headers.t -> Status.t -> string -> t
 end
