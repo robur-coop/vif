@@ -6,19 +6,23 @@ type ('c, 'a) t = {
     request: [ `V1 of H1.Request.t | `V2 of H2.Request.t ]
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; encoding: ('c, 'a) Vif_content_type.t
+  ; env: Vif_m.Hmap.t
 }
 
 let of_reqd : type c a.
-    encoding:(c, a) Vif_content_type.t -> Httpcats.Server.reqd -> (c, a) t =
- fun ~encoding -> function
+       encoding:(c, a) Vif_content_type.t
+    -> env:Vif_m.Hmap.t
+    -> Httpcats.Server.reqd
+    -> (c, a) t =
+ fun ~encoding ~env -> function
   | `V1 reqd ->
       let request = `V1 (H1.Reqd.request reqd) in
       let body = `V1 (H1.Reqd.request_body reqd) in
-      { request; body; encoding }
+      { request; body; encoding; env }
   | `V2 reqd ->
       let request = `V2 (H2.Reqd.request reqd) in
       let body = `V2 (H2.Reqd.request_body reqd) in
-      { request; body; encoding }
+      { request; body; encoding; env }
 
 let target { request; _ } =
   match request with
@@ -102,3 +106,12 @@ let of_json : type a.
             error_msgf "Invalid JSON value"
         end
     end
+
+let get : type v. ('cfg, v) Vif_m.t -> ('a, 'c) t -> v option =
+ fun (Vif_m.Middleware (_, key)) { env; _ } -> Vif_m.Hmap.find key env
+
+type request = Vif_request0.t
+
+let headers_of_request = Vif_request0.headers
+let method_of_request = Vif_request0.meth
+let target_of_request = Vif_request0.target

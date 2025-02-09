@@ -20,6 +20,7 @@ end
 module C = Vif_c
 module D = Vif_d
 module S = Vif_s
+module M = Vif_m
 
 module Ds = struct
   type 'value t =
@@ -42,6 +43,31 @@ module Ds = struct
       finally v
     in
     Vif_d.Hmap.iter fn m
+end
+
+module Ms = struct
+  type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) Vif_m.t * 'cfg t -> 'cfg t
+  type ('cfg, 'v) fn = ('cfg, 'v) Vif_m.fn
+
+  let make = Vif_m.make
+
+  type ('value, 'a, 'c) ctx = {
+      server: Vif_s.t
+    ; request: Vif_request0.t
+    ; target: string
+    ; user's_value: 'value
+  }
+
+  let rec run : type v. v t -> (v, 'a, 'c) ctx -> Vif_m.Hmap.t -> Vif_m.Hmap.t =
+   fun lst ctx env ->
+    match lst with
+    | [] -> env
+    | Middleware (fn, key) :: r -> begin
+        match fn ctx.request ctx.target ctx.server ctx.user's_value with
+        | Some value -> run r ctx (Vif_m.Hmap.add key value env)
+        | None -> run r ctx env
+        | exception _exn -> run r ctx env
+      end
 end
 
 module Content_type = Vif_content_type
@@ -75,7 +101,7 @@ let method_of_request server =
   | `V1 reqd -> ((H1.Reqd.request reqd).H1.Request.meth :> H2.Method.t)
   | `V2 reqd -> ((H2.Reqd.request reqd).H2.Request.meth :> H2.Method.t)
 
-let request server =
+let request ~env server =
   let extract : type c a.
          Vif_method.t option
       -> (c, a) Vif_content_type.t
@@ -84,47 +110,47 @@ let request server =
     let meth' = method_of_request server in
     match (meth, meth', c) with
     | None, _, (Vif_content_type.Any as encoding) ->
-        Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
     | Some a, b, (Vif_content_type.Any as encoding) ->
-        if a = b then Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        if a = b then Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
     | None, _, (Null as encoding) ->
-        Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
     | Some a, b, (Null as encoding) ->
-        if a = b then Some (Vif_request.of_reqd ~encoding server.S.reqd)
+        if a = b then Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
     | None, _, (Json_encoding _ as encoding) ->
         let c = content_type server in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json then
-          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
     | Some a, b, (Json_encoding _ as encoding) ->
         let c = content_type server in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json && a = b then
-          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
     | None, _, (Json as encoding) ->
         let c = content_type server in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json then
-          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
     | Some a, b, (Json as encoding) ->
         let c = content_type server in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json && a = b then
-          Some (Vif_request.of_reqd ~encoding server.S.reqd)
+          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
         else None
   in
   { Vif_r.extract }
 
-let handler ~default routes devices user's_value =
+let handler ~default ~middlewares routes devices user's_value =
   ();
   fun socket reqd ->
     let target =
@@ -133,7 +159,11 @@ let handler ~default routes devices user's_value =
       | `V2 reqd -> (H2.Reqd.request reqd).H2.Request.target
     in
     let server = { Vif_s.reqd; socket; devices } in
-    let request = request server in
+    let ctx =
+      { Ms.server; request= Vif_request0.of_reqd reqd; target; user's_value }
+    in
+    let env = Ms.run middlewares ctx Vif_m.Hmap.empty in
+    let request = request ~env server in
     Log.debug (fun m -> m "Handle a new request to %s" target);
     let fn = R.dispatch ~default routes ~request ~target in
     match fn server user's_value with Vif_response.Response -> ()
@@ -165,8 +195,8 @@ let store_pid = function
       output_string oc (string_of_int (Unix.getpid ()));
       close_out oc
 
-let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default
-    routes user's_value =
+let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
+    ?(middlewares = Ms.[]) ~default routes user's_value =
   let interactive = !Sys.interactive in
   let domains = Miou.Domain.available () in
   store_pid cfg.pid;
@@ -185,10 +215,11 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[]) ~default
     Ds.run Vif_d.empty devices user's_value
   in
   Logs.debug (fun m -> m "devices launched");
-  let fn0 = handler ~default routes devices user's_value in
+  let fn0 = handler ~default ~middlewares routes devices user's_value in
   let prm = Miou.async @@ fun () -> handle stop cfg fn0 in
   let tasks =
-    List.init domains (fun _ -> handler ~default routes devices user's_value)
+    List.init domains (fun _ ->
+        handler ~default ~middlewares routes devices user's_value)
   in
   let tasks =
     if domains > 0 then Miou.parallel (handle stop cfg) tasks else []

@@ -22,10 +22,14 @@ module U : sig
   val eval : ('f, string) t -> 'f
 end
 
+module Json = Json
 module Stream = Stream
 
 module Headers : sig
   type t = (string * string) list
+
+  val add_unless_exists : t -> string -> string -> t
+  val get : t -> string -> string option
 end
 
 module Method : sig
@@ -41,8 +45,6 @@ module Method : sig
     | `Other of string ]
 end
 
-module Json = Json
-
 module Content_type : sig
   type null
   type json
@@ -52,6 +54,10 @@ module Content_type : sig
   val json : (json, Json.t) t
   val json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
   val any : ('c, string) t
+end
+
+module M : sig
+  type ('cfg, 'v) t
 end
 
 module Request : sig
@@ -64,6 +70,13 @@ module Request : sig
   val to_string : ('c, 'a) t -> string
   val to_stream : ('c, 'a) t -> string Stream.stream
   val of_json : (Content_type.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
+
+  type request
+
+  val headers_of_request : request -> Headers.t
+  val method_of_request : request -> Method.t
+  val target_of_request : request -> string
 end
 
 module R : sig
@@ -168,6 +181,13 @@ module S : sig
   val device : ('value, 'a) D.device -> t -> 'a
 end
 
+module Ms : sig
+  type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) M.t * 'cfg t -> 'cfg t
+  type ('cfg, 'v) fn = Request.request -> string -> S.t -> 'cfg -> 'v option
+
+  val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) M.t
+end
+
 module Status : sig
   type t =
     [ `Accepted
@@ -257,6 +277,7 @@ val config :
 val run :
      ?cfg:config
   -> ?devices:'value Ds.t
+  -> ?middlewares:'value Ms.t
   -> default:(('c, string) Request.t -> string -> S.t -> 'value -> Response.t)
   -> (S.t -> 'value -> Response.t) R.route list
   -> 'value
