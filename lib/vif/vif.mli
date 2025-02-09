@@ -232,7 +232,13 @@ module Response : sig
     -> string Stream.stream
     -> t
 
-  val with_string : S.t -> ?headers:Headers.t -> Status.t -> string -> t
+  val with_string :
+       ?compression:[ `DEFLATE ]
+    -> S.t
+    -> ?headers:Headers.t
+    -> Status.t
+    -> string
+    -> t
 end
 
 type config
