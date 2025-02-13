@@ -156,42 +156,6 @@ module Bstr = struct
 end
 
 module Sink = struct
-  module Hdrs = Vif_headers
-
-  let response ?headers:(hdrs = []) status server =
-    match Vif_s.reqd server with
-    | `V1 reqd ->
-        let hdrs = Hdrs.add_unless_exists hdrs "transfer-encoding" "chunked" in
-        let hdrs = H1.Headers.of_list hdrs in
-        let status =
-          match status with
-          | #H1.Status.t as status -> status
-          | _ -> invalid_arg "Sink.response: invalid status"
-        in
-        let resp = H1.Response.create ~headers:hdrs status in
-        let init () = H1.Reqd.respond_with_streaming reqd resp in
-        let push body str =
-          H1.Body.Writer.write_string body str;
-          body
-        in
-        let full _ = false in
-        (* TODO(dinosaure): content-length? *)
-        let stop = H1.Body.Writer.close in
-        (Sink { init; push; full; stop } : (string, unit) sink)
-    | `V2 reqd ->
-        let hdrs = Hdrs.add_unless_exists hdrs "transfer-encoding" "chunked" in
-        let hdrs = H2.Headers.of_list hdrs in
-        let resp = H2.Response.create ~headers:hdrs status in
-        let init () = H2.Reqd.respond_with_streaming reqd resp in
-        let push body str =
-          H2.Body.Writer.write_string body str;
-          body
-        in
-        let full _ = false in
-        (* TODO(dinosaure): content-length? *)
-        let stop = H2.Body.Writer.close in
-        (Sink { init; push; full; stop } : (string, unit) sink)
-
   type value = [ `Null | `Bool of bool | `String of string | `Float of float ]
   type await = [ `Await ]
   type error = [ `Error of Jsonm.error ]

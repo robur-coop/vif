@@ -30,9 +30,6 @@ type ('a, 'r) sink =
       -> ('a, 'r) sink
 
 module Sink : sig
-  val response :
-    ?headers:Vif_headers.t -> Vif_status.t -> Vif_s.t -> (string, unit) sink
-
   val json : (string, (Json.t, [ `Msg of string ]) result) sink
 end
 

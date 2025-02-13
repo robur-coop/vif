@@ -3,43 +3,26 @@ let src = Logs.Src.create "vif.request"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type ('c, 'a) t = {
-    request: [ `V1 of H1.Request.t | `V2 of H2.Request.t ]
-  ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
+    body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; encoding: ('c, 'a) Vif_content_type.t
   ; env: Vif_m.Hmap.t
+  ; request: Vif_request0.t
 }
 
-let of_reqd : type c a.
+let of_req0 : type c a.
        encoding:(c, a) Vif_content_type.t
     -> env:Vif_m.Hmap.t
-    -> Httpcats.Server.reqd
+    -> Vif_request0.t
     -> (c, a) t =
- fun ~encoding ~env -> function
-  | `V1 reqd ->
-      let request = `V1 (H1.Reqd.request reqd) in
-      let body = `V1 (H1.Reqd.request_body reqd) in
-      { request; body; encoding; env }
-  | `V2 reqd ->
-      let request = `V2 (H2.Reqd.request reqd) in
-      let body = `V2 (H2.Reqd.request_body reqd) in
-      { request; body; encoding; env }
+ fun ~encoding ~env request ->
+  let body = Vif_request0.request_body request in
+  { request; body; encoding; env }
 
-let target { request; _ } =
-  match request with
-  | `V1 request -> request.H1.Request.target
-  | `V2 request -> request.H2.Request.target
-
-let meth { request; _ } =
-  match request with
-  | `V1 request -> request.H1.Request.meth
-  | `V2 request -> request.H2.Request.meth
-
-let version { request; _ } = match request with `V1 _ -> 1 | `V2 _ -> 2
-
-let headers { request; _ } =
-  match request with
-  | `V1 request -> H1.Headers.to_list request.H1.Request.headers
-  | `V2 request -> H2.Headers.to_list request.H2.Request.headers
+let target { request; _ } = Vif_request0.target request
+let meth { request; _ } = Vif_request0.meth request
+let version { request; _ } = Vif_request0.version request
+let headers { request; _ } = Vif_request0.headers request
+let reqd { request; _ } = Vif_request0.reqd request
 
 let to_string ~schedule ~close body =
   let buf = Buffer.create 0x7ff in

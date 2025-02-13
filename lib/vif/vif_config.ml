@@ -8,9 +8,17 @@ type config = {
   ; backlog: int
   ; sockaddr: Unix.sockaddr
   ; pid: Fpath.t option
+  ; cookie_key: Mirage_crypto.AES.GCM.key
 }
 
-let config ?pid ?http ?tls ?(backlog = 64) sockaddr =
+let really_bad_secret =
+  let open Digestif in
+  let hash = SHA256.digest_string "\xde\xad\xbe\xef" in
+  let hash = SHA256.to_raw_string hash in
+  Mirage_crypto.AES.GCM.of_secret hash
+
+let config ?(cookie_key = really_bad_secret) ?pid ?http ?tls ?(backlog = 64)
+    sockaddr =
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
@@ -18,4 +26,4 @@ let config ?pid ?http ?tls ?(backlog = 64) sockaddr =
     | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
     | None -> None
   in
-  { http; tls; backlog; sockaddr; pid }
+  { http; tls; backlog; sockaddr; pid; cookie_key }

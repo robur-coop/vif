@@ -77,96 +77,82 @@ module Status = Vif_status
 module Headers = Vif_headers
 module Request = Vif_request
 module Response = Vif_response
+module Cookie = Vif_cookie
+
+type e = Response.e = Empty
+type f = Response.f = Filled
+type s = Response.s = Sent
+
+let ( let* ) = Response.bind
+let return = Response.return
 
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
 
-let content_type server =
-  let headers =
-    match server.S.reqd with
-    | `V1 reqd ->
-        let request = H1.Reqd.request reqd in
-        H1.Headers.to_list request.H1.Request.headers
-    | `V2 reqd ->
-        let request = H2.Reqd.request reqd in
-        H2.Headers.to_list request.H2.Request.headers
-  in
+let content_type req0 =
+  let headers = Vif_request0.headers req0 in
   let c = List.assoc_opt "content-type" headers in
   let c = Option.map (fun c -> c ^ "\r\n") c in
   let c = Option.to_result ~none:`Not_found c in
   Result.bind c Multipart_form.Content_type.of_string
 
-let method_of_request server =
-  match server.S.reqd with
-  | `V1 reqd -> ((H1.Reqd.request reqd).H1.Request.meth :> H2.Method.t)
-  | `V2 reqd -> ((H2.Reqd.request reqd).H2.Request.meth :> H2.Method.t)
-
-let request ~env server =
+let recognize_request ~env req0 =
   let extract : type c a.
          Vif_method.t option
       -> (c, a) Vif_content_type.t
       -> (c, a) Vif_request.t option =
    fun meth c ->
-    let meth' = method_of_request server in
+    let meth' = Vif_request0.meth req0 in
     match (meth, meth', c) with
     | None, _, (Vif_content_type.Any as encoding) ->
-        Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+        Some (Vif_request.of_req0 ~encoding ~env req0)
     | Some a, b, (Vif_content_type.Any as encoding) ->
-        if a = b then Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
-        else None
+        if a = b then Some (Vif_request.of_req0 ~encoding ~env req0) else None
     | None, _, (Null as encoding) ->
-        Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+        Some (Vif_request.of_req0 ~encoding ~env req0)
     | Some a, b, (Null as encoding) ->
-        if a = b then Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
-        else None
+        if a = b then Some (Vif_request.of_req0 ~encoding ~env req0) else None
     | None, _, (Json_encoding _ as encoding) ->
-        let c = content_type server in
+        let c = content_type req0 in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
-        if application_json then
-          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+        if application_json then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
     | Some a, b, (Json_encoding _ as encoding) ->
-        let c = content_type server in
+        let c = content_type req0 in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json && a = b then
-          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+          Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
     | None, _, (Json as encoding) ->
-        let c = content_type server in
+        let c = content_type req0 in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
-        if application_json then
-          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+        if application_json then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
     | Some a, b, (Json as encoding) ->
-        let c = content_type server in
+        let c = content_type req0 in
         let application_json = Result.map is_application_json c in
         let application_json = Result.value ~default:false application_json in
         if application_json && a = b then
-          Some (Vif_request.of_reqd ~encoding ~env server.S.reqd)
+          Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
   in
   { Vif_r.extract }
 
-let handler ~default ~middlewares routes devices user's_value =
+let handler cfg ~default ~middlewares routes devices user's_value =
   ();
   fun socket reqd ->
-    let target =
-      match reqd with
-      | `V1 reqd -> (H1.Reqd.request reqd).H1.Request.target
-      | `V2 reqd -> (H2.Reqd.request reqd).H2.Request.target
-    in
-    let server = { Vif_s.reqd; socket; devices } in
-    let ctx =
-      { Ms.server; request= Vif_request0.of_reqd reqd; target; user's_value }
-    in
+    let server = { Vif_s.devices; cookie_key= cfg.Vif_config.cookie_key } in
+    let req0 = Vif_request0.of_reqd socket reqd in
+    let target = Vif_request0.target req0 in
+    let ctx = { Ms.server; request= req0; target; user's_value } in
     let env = Ms.run middlewares ctx Vif_m.Hmap.empty in
-    let request = request ~env server in
-    Log.debug (fun m -> m "Handle a new request to %s" target);
+    let request = recognize_request ~env req0 in
     let fn = R.dispatch ~default routes ~request ~target in
-    match fn server user's_value with Vif_response.Response -> ()
+    match Vif_response.(run req0 empty) (fn server user's_value) with
+    | Response.Sent, () -> ()
 
 type config = Vif_config.config
 
@@ -197,6 +183,9 @@ let store_pid = function
 
 let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
     ?(middlewares = Ms.[]) ~default routes user's_value =
+  let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
+  let finally () = Mirage_crypto_rng_miou_unix.kill rng in
+  Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
   let domains = Miou.Domain.available () in
   store_pid cfg.pid;
@@ -215,11 +204,11 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
     Ds.run Vif_d.empty devices user's_value
   in
   Logs.debug (fun m -> m "devices launched");
-  let fn0 = handler ~default ~middlewares routes devices user's_value in
+  let fn0 = handler cfg ~default ~middlewares routes devices user's_value in
   let prm = Miou.async @@ fun () -> handle stop cfg fn0 in
   let tasks =
     List.init domains (fun _ ->
-        handler ~default ~middlewares routes devices user's_value)
+        handler cfg ~default ~middlewares routes devices user's_value)
   in
   let tasks =
     if domains > 0 then Miou.parallel (handle stop cfg) tasks else []

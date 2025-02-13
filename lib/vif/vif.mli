@@ -175,9 +175,7 @@ end
 
 module S : sig
   type t
-  type reqd = [ `V1 of H1.Reqd.t | `V2 of H2.Reqd.t ]
 
-  val reqd : t -> reqd
   val device : ('value, 'a) D.device -> t -> 'a
 end
 
@@ -242,29 +240,79 @@ module Status : sig
 end
 
 module Response : sig
-  type t
+  type ('p, 'q, 'a) t
+  type e
+  type f
+  type s
 
   val with_stream :
-       ?compression:[ `DEFLATE ]
-    -> S.t
-    -> ?headers:Headers.t
-    -> Status.t
+       ?compression:[< `DEFLATE ]
+    -> ('c, 'a) Request.t
     -> string Stream.stream
-    -> t
+    -> (e, f, unit) t
 
   val with_string :
-       ?compression:[ `DEFLATE ]
+    ?compression:[< `DEFLATE ] -> ('c, 'a) Request.t -> string -> (e, f, unit) t
+
+  val respond : Status.t -> (f, s, unit) t
+
+  (** Headers manipulation. *)
+
+  val add : field:string -> string -> ('p, 'p, unit) t
+  val rem : field:string -> ('p, 'p, unit) t
+  val set : field:string -> string -> ('p, 'p, unit) t
+  val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
+end
+
+module Cookie : sig
+  type config
+
+  val config :
+       ?expires:float
+    -> ?max_age:float
+    -> ?domain:[ `host ] Domain_name.t
+    -> ?path:bool
+    -> ?secure:bool
+    -> ?http_only:bool
+    -> ?same_site:[ `Lax | `Strict | `None ]
+    -> unit
+    -> config
+
+  val get :
+       ?encrypted:bool
+    -> name:string
     -> S.t
-    -> ?headers:Headers.t
-    -> Status.t
+    -> ('c, 'a) Request.t
+    -> ( string
+       , [> `Invalid_encrypted_cookie | `Msg of string | `Not_found ] )
+       result
+
+  val set :
+       ?encrypt:bool
+    -> ?cfg:config
+    -> ?path:string
+    -> name:string
+    -> S.t
+    -> ('c, 'a) Request.t
     -> string
-    -> t
+    -> ('p, 'p, unit) Response.t
 end
 
 type config
+type e = Response.e
+type f = Response.f
+type s = Response.s
+
+val ( let* ) :
+     ('p, 'q, 'a) Response.t
+  -> ('a -> ('q, 'r, 'b) Response.t)
+  -> ('p, 'r, 'b) Response.t
+
+val return : 'a -> ('p, 'p, 'a) Response.t
 
 val config :
-     ?pid:Fpath.t
+     ?cookie_key:Mirage_crypto.AES.GCM.key
+  -> ?pid:Fpath.t
   -> ?http:
        [ `H1 of H1.Config.t
        | `H2 of H2.Config.t
@@ -278,8 +326,13 @@ val run :
      ?cfg:config
   -> ?devices:'value Ds.t
   -> ?middlewares:'value Ms.t
-  -> default:(('c, string) Request.t -> string -> S.t -> 'value -> Response.t)
-  -> (S.t -> 'value -> Response.t) R.route list
+  -> default:
+       (   ('c, string) Request.t
+        -> string
+        -> S.t
+        -> 'value
+        -> (e, s, unit) Response.t)
+  -> (S.t -> 'value -> (e, s, unit) Response.t) R.route list
   -> 'value
   -> unit
 

@@ -1,7 +1,10 @@
 #require "vif" ;;
 
-let default req target server () =
-  Vif.Response.with_string server `OK "Hello World!\n"
+open Vif ;;
+
+let default req target _server () =
+  let* () = Response.with_string req "Hello World!\n" in
+  Response.respond `OK
 ;;
 
 let () = Miou_unix.run @@ fun () ->

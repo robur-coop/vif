@@ -23,7 +23,9 @@ let foo =
   conv prj inj foo
 ;;
 
-let deserialize req server () =
+open Vif ;;
+
+let deserialize req _server () =
   match Vif.Request.of_json req with
   | Ok (foo : foo) ->
       let str =
@@ -34,8 +36,11 @@ let deserialize req server () =
           Fmt.(Dump.option string)
           foo.address
       in
-      Vif.Response.with_string server `OK str
-  | Error (`Msg msg) -> Vif.Response.with_string server (`Code 422) msg
+      let* () = Response.with_string req str in
+      Response.respond `OK
+  | Error (`Msg msg) ->
+      let* () = Response.with_string req msg in
+      Response.respond (`Code 422)
 ;;
 
 let routes =
@@ -45,9 +50,10 @@ let routes =
   [ post (json_encoding foo) (rel /?? nil) --> deserialize ]
 ;;
 
-let default req target server () =
+let default req target _server () =
   let str = Fmt.str "%s not found\n" target in
-  Vif.Response.with_string server `Not_found str
+  let* () = Response.with_string req str in
+  Response.respond `Not_found
 ;;
 
 let () = Miou_unix.run @@ fun () -> Vif.run ~default routes () ;;
