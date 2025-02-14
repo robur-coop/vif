@@ -1,3 +1,9 @@
+let src = Logs.Src.create "vif.stream"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
+let ( % ) f g = fun x -> f (g x)
+
 module Bqueue = struct
   type 'a t = {
       buf: 'a option array
@@ -33,6 +39,8 @@ module Bqueue = struct
   let get t =
     Miou.Mutex.protect t.mutex @@ fun () ->
     while t.wr_pos = t.rd_pos && not t.closed do
+      Log.debug (fun m ->
+          m "bq: wr_pos:%d, rd_pos:%d, closed: %b" t.wr_pos t.rd_pos t.closed);
       Miou.Condition.wait t.non_empty_or_close t.mutex
     done;
     if t.wr_pos = t.rd_pos && t.closed then None
@@ -163,7 +171,14 @@ module Sink = struct
 
   let errorf fmt = Fmt.kstr (fun msg -> `Error msg) fmt
 
-  let json =
+  let string =
+    let init () = Buffer.create 0x7ff in
+    let push buf str = Buffer.add_string buf str; buf in
+    let full = Fun.const false in
+    let stop = Buffer.contents in
+    Sink { init; push; full; stop }
+
+  let json () =
     let decoder = Jsonm.decoder `Manual in
     let rec error (`Error err) =
       errorf "Invalid JSON input: %a" Jsonm.pp_error err
@@ -355,6 +370,7 @@ module Stream = struct
     let acc = init () in
     try stop (fn acc)
     with exn ->
+      Log.err (fun m -> m "Stram.Sink.bracket: %s" (Printexc.to_string exn));
       let _ = stop acc in
       reraise exn
 
@@ -363,9 +379,10 @@ module Stream = struct
       let rec go r =
         if k.full r then r
         else
-          match Bqueue.get bq with None -> r | Some str -> go (k.push r str)
+          let value = Bqueue.get bq in
+          Option.fold ~none:r ~some:(go % k.push r) value
       in
-      let stop r = Bqueue.close bq; k.stop r in
+      let stop r = k.stop r in
       bracket go ~init:k.init ~stop
     in
     { stream }

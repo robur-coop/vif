@@ -67,9 +67,8 @@ module Request : sig
   val meth : ('c, 'a) t -> Method.t
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
-  val to_string : ('c, 'a) t -> string
-  val to_stream : ('c, 'a) t -> string Stream.stream
   val of_json : (Content_type.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val stream : ('c, 'a) t -> string Stream.stream
   val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
 
   type request

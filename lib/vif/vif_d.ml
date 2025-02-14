@@ -67,13 +67,13 @@ let device : type v f r.
   let key : r Hmap.key = Hmap.Key.create { name; finally } in
   Device (args, fn, key)
 
-let run : type v. t -> v -> (v, 'r) device -> t =
+let run : type v. Hmap.t -> v -> (v, 'r) device -> Hmap.t =
  fun devices user's_value (Device (args, fn, key)) ->
   let v = ref None in
   let k fn devices =
     v := Some devices;
     fn user's_value
   in
-  let x = keval_args devices user's_value k args fn in
+  let x = keval_args (Devices devices) user's_value k args fn in
   let[@warning "-8"] (Devices t) = Option.get !v in
-  Devices (Hmap.add key x t)
+  Hmap.add key x t

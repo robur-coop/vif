@@ -39,7 +39,7 @@ let strf fmt = Format.asprintf fmt
 module Hdrs = Vif_headers
 
 let compress_string ~headers str =
-  match List.assoc_opt "content-encoding" headers with
+  match Vif_headers.get headers "content-encoding" with
   | Some "gzip" -> assert false
   | _ -> str
 
@@ -145,7 +145,7 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
         go state (fn x)
     | state, Return x -> (state, x)
     | state, Add_unless_exists (k, v) -> begin
-        match List.assoc_opt k !headers with
+        match Vif_headers.get !headers k with
         | Some _ -> (state, false)
         | None ->
             headers := (k, v) :: !headers;
@@ -155,21 +155,21 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
         headers := (k, v) :: !headers;
         (state, ())
     | state, Rem_header k ->
-        headers := List.remove_assoc k !headers;
+        headers := Vif_headers.rem !headers k;
         (state, ())
     | state, Set_header (k, v) ->
-        headers := (k, v) :: List.remove_assoc k !headers;
+        headers := (k, v) :: Vif_headers.rem !headers k;
         (state, ())
     | Empty, Stream stream -> (Filled stream, ())
     | Empty, String str -> (Filled (Stream.Stream.singleton str), ())
     | Filled stream, Respond status ->
         let headers = !headers in
         let headers, stream =
-          match List.assoc_opt "content-encoding" headers with
+          match Vif_headers.get headers "content-encoding" with
           | Some "deflate" ->
               let flow = Stream.Flow.deflate () in
               let stream = Stream.Stream.via flow stream in
-              let headers = List.remove_assoc "content-length" headers in
+              let headers = Vif_headers.rem headers "content-length" in
               let headers =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"

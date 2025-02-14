@@ -26,8 +26,10 @@ let foo =
 open Vif ;;
 
 let deserialize req _server () =
+  Logs.debug (fun m -> m "New request");
   match Vif.Request.of_json req with
   | Ok (foo : foo) ->
+      Logs.debug (fun m -> m "JSON decoded");
       let str =
         Fmt.str "username: %s, password: %s, age: %a, address: %a\n"
           foo.username foo.password

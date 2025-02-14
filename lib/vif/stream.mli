@@ -30,7 +30,8 @@ type ('a, 'r) sink =
       -> ('a, 'r) sink
 
 module Sink : sig
-  val json : (string, (Json.t, [ `Msg of string ]) result) sink
+  val json : unit -> (string, (Json.t, [ `Msg of string ]) result) sink
+  val string : (string, string) sink
 end
 
 type ('a, 'b) flow = { flow: 'r. ('b, 'r) sink -> ('a, 'r) sink } [@@unboxed]
@@ -61,6 +62,6 @@ module Stream : sig
   val into : ('a, 'b) sink -> 'a stream -> 'b
   val via : ('a, 'b) flow -> 'a stream -> 'b stream
   val from : 'a source -> 'a stream
-  val of_bqueue : 'a Bqueue.t -> 'a stream
+  val of_bqueue : string Bqueue.t -> string stream
   val singleton : 'a -> 'a stream
 end

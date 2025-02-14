@@ -27,7 +27,7 @@ module Ds = struct
     | [] : 'value t
     | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
 
-  let run : Vif_d.t -> 'value t -> 'value -> Vif_d.t =
+  let run : Vif_d.Hmap.t -> 'value t -> 'value -> Vif_d.Hmap.t =
    fun t lst user's_value ->
     let rec go t = function
       | [] -> t
@@ -91,7 +91,7 @@ let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
 
 let content_type req0 =
   let headers = Vif_request0.headers req0 in
-  let c = List.assoc_opt "content-type" headers in
+  let c = Vif_headers.get headers "content-type" in
   let c = Option.map (fun c -> c ^ "\r\n") c in
   let c = Option.to_result ~none:`Not_found c in
   Result.bind c Multipart_form.Content_type.of_string
@@ -141,18 +141,77 @@ let recognize_request ~env req0 =
   in
   { Vif_r.extract }
 
-let handler cfg ~default ~middlewares routes devices user's_value =
+type 'value daemon = {
+    queue: 'value user's_function Queue.t
+  ; mutex: Miou.Mutex.t
+  ; orphans: unit Miou.orphans
+  ; condition: Miou.Condition.t
+  ; user's_value: 'value
+  ; server: Vif_s.t
+}
+
+and 'value user's_function =
+  | User's_task : Vif_request0.t * 'value fn -> 'value user's_function
+
+and 'value fn = Vif_s.t -> 'value -> (e, s, unit) Vif_response.t
+
+let to_ctx daemon req0 =
+  {
+    Ms.server= daemon.server
+  ; Ms.request= req0
+  ; Ms.target= Vif_request0.target req0
+  ; Ms.user's_value= daemon.user's_value
+  }
+
+let rec clean_up orphans =
+  match Miou.care orphans with
+  | None -> ()
+  | Some None -> ()
+  | Some (Some prm) -> begin
+      match Miou.await prm with
+      | Ok () -> clean_up orphans
+      | Error exn ->
+          let bt = Printexc.get_raw_backtrace () in
+          Log.err (fun m -> m "User's exception: %s" (Printexc.to_string exn));
+          Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
+          clean_up orphans
+    end
+
+let rec user's_functions daemon =
+  clean_up daemon.orphans;
+  let tasks =
+    Miou.Mutex.protect daemon.mutex @@ fun () ->
+    while Queue.is_empty daemon.queue do
+      Miou.Condition.wait daemon.condition daemon.mutex
+    done;
+    let lst = List.of_seq (Queue.to_seq daemon.queue) in
+    Queue.drop daemon.queue; lst
+  in
+  let fn (User's_task (req0, fn)) =
+    let _prm =
+      Miou.call ~orphans:daemon.orphans @@ fun () ->
+      let response = fn daemon.server daemon.user's_value in
+      match Vif_response.(run req0 empty) response with
+      | Vif_response.Sent, () -> ()
+    in
+    ()
+  in
+  List.iter fn tasks; user's_functions daemon
+
+let handler _cfg ~default ~middlewares routes daemon =
   ();
   fun socket reqd ->
-    let server = { Vif_s.devices; cookie_key= cfg.Vif_config.cookie_key } in
     let req0 = Vif_request0.of_reqd socket reqd in
-    let target = Vif_request0.target req0 in
-    let ctx = { Ms.server; request= req0; target; user's_value } in
+    let ctx = to_ctx daemon req0 in
     let env = Ms.run middlewares ctx Vif_m.Hmap.empty in
     let request = recognize_request ~env req0 in
+    let target = Vif_request0.target req0 in
     let fn = R.dispatch ~default routes ~request ~target in
-    match Vif_response.(run req0 empty) (fn server user's_value) with
-    | Response.Sent, () -> ()
+    begin
+      Miou.Mutex.protect daemon.mutex @@ fun () ->
+      Queue.push (User's_task (req0, fn)) daemon.queue;
+      Miou.Condition.signal daemon.condition
+    end
 
 type config = Vif_config.config
 
@@ -193,29 +252,43 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
     match interactive with
     | true ->
         let stop = Httpcats.Server.stop () in
-        let fn _sigint = Httpcats.Server.switch stop in
+        let fn _sigint =
+          Log.debug (fun m -> m "Server shutdown request (SIGINT)");
+          Httpcats.Server.switch stop
+        in
         let behavior = Sys.Signal_handle fn in
         ignore (Miou.sys_signal Sys.sigint behavior);
         Some stop
     | false -> None
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
-  let[@warning "-8"] (Vif_d.Devices devices) =
-    Ds.run Vif_d.empty devices user's_value
-  in
+  let devices = Ds.run Vif_d.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
-  let fn0 = handler cfg ~default ~middlewares routes devices user's_value in
-  let prm = Miou.async @@ fun () -> handle stop cfg fn0 in
+  let server = { Vif_s.devices; cookie_key= cfg.Vif_config.cookie_key } in
+  let daemon =
+    {
+      queue= Queue.create ()
+    ; mutex= Miou.Mutex.create ()
+    ; orphans= Miou.orphans ()
+    ; condition= Miou.Condition.create ()
+    ; user's_value
+    ; server
+    }
+  in
+  let user's_tasks = Miou.call @@ fun () -> user's_functions daemon in
+  let fn0 = handler cfg ~default ~middlewares routes daemon in
+  let prm0 = Miou.async @@ fun () -> handle stop cfg fn0 in
   let tasks =
-    List.init domains (fun _ ->
-        handler cfg ~default ~middlewares routes devices user's_value)
+    let fn _ = handler cfg ~default ~middlewares routes daemon in
+    List.init domains fn
   in
   let tasks =
     if domains > 0 then Miou.parallel (handle stop cfg) tasks else []
   in
-  Miou.await_exn prm;
+  Miou.await_exn prm0;
   List.iter (function Ok () -> () | Error exn -> raise exn) tasks;
   Ds.finally (Vif_d.Devices devices);
+  Miou.cancel user's_tasks;
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options.setup_config
