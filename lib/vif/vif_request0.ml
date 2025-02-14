@@ -5,6 +5,7 @@ type t = {
   ; socket: socket
   ; on_localhost: bool
   ; stream: string Stream.stream
+  ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
 }
 
 and reqd = Httpcats.Server.reqd
@@ -35,10 +36,10 @@ let to_stream = function
       |> Stream.Stream.of_bqueue
 
 let of_reqd socket reqd =
-  let request =
+  let request, body =
     match reqd with
-    | `V1 reqd -> V1 (H1.Reqd.request reqd)
-    | `V2 reqd -> V2 (H2.Reqd.request reqd)
+    | `V1 reqd -> (V1 (H1.Reqd.request reqd), `V1 (H1.Reqd.request_body reqd))
+    | `V2 reqd -> (V2 (H2.Reqd.request reqd), `V2 (H2.Reqd.request_body reqd))
   in
   let tls =
     match socket with `Tls tls -> Tls_miou_unix.epoch tls | `Tcp _ -> None
@@ -58,7 +59,7 @@ let of_reqd socket reqd =
         || inet_addr = Unix.inet6_addr_loopback
   in
   let stream = to_stream reqd in
-  { request; tls; reqd; socket; on_localhost; stream }
+  { request; tls; reqd; socket; on_localhost; stream; body }
 
 let headers { request; _ } =
   match request with
@@ -85,3 +86,8 @@ let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost
 let reqd { reqd; _ } = reqd
 let stream { stream; _ } = stream
+
+let close { body; _ } =
+  match body with
+  | `V1 body -> H1.Body.Reader.close body
+  | `V2 body -> H2.Body.Reader.close body

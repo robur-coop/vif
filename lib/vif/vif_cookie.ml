@@ -1,3 +1,7 @@
+let src = Logs.Src.create "vif.cookie"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 let prefix req0 =
   let target = Vif_request0.target req0 in
   let secure =
@@ -10,8 +14,7 @@ let prefix req0 =
 
 let is_cookie key = String.lowercase_ascii key = "cookie"
 
-let all_cookies req =
-  let hdrs = Vif_request0.headers req in
+let all_cookies hdrs =
   let cookies = List.filter (fun (k, _) -> is_cookie k) hdrs in
   let cookies = List.map snd cookies in
   let cookies = List.map (String.split_on_char ';') cookies in
@@ -29,10 +32,16 @@ let all_cookies req =
 let guard error fn = if fn () then Ok () else Error error
 let err_cookie = `Invalid_encrypted_cookie
 
+let pp_error ppf = function
+  | `Invalid_encrypted_cookie -> Fmt.string ppf "Invalid encrypted cookie"
+  | `Not_found -> Fmt.string ppf "Cookie not found"
+  | `Msg str -> Fmt.string ppf str
+
 let get ?(encrypted = true) ~name server req0 =
+  let hdrs = Vif_request0.headers req0 in
   let prefix = prefix req0 in
   let name = prefix ^ name in
-  match List.assoc_opt name (all_cookies req0) with
+  match List.assoc_opt name (all_cookies hdrs) with
   | None -> Error `Not_found
   | Some value when encrypted ->
       let ( let* ) = Result.bind in
@@ -51,9 +60,6 @@ let get ?(encrypted = true) ~name server req0 =
       let* () = guard err @@ fun () -> Option.is_some value in
       Ok (Option.get value)
   | Some value -> Ok value
-
-let get ?encrypted ~name server req =
-  get ?encrypted ~name server req.Vif_request.request
 
 type config = {
     expires: float option
@@ -118,11 +124,11 @@ let set ?(encrypt = true) ?(cfg = default_config) ?(path = "/") ~name server
     let key = Vif_s.cookie_key server in
     let nonce = random 12 in
     let adata = "vif.cookie-" ^ name in
-    let value = "\x00" ^ nonce ^ value in
     let value =
       Mirage_crypto.AES.GCM.authenticate_encrypt ~key ~nonce ~adata value
     in
     let alphabet = Base64.uri_safe_alphabet in
+    let value = "\x00" ^ nonce ^ value in
     let value = Base64.encode_exn ~pad:false ~alphabet value in
     let value = set_cookie cfg ~path name value in
     Vif_response.add ~field:"set-cookie" value

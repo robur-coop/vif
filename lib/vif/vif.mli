@@ -281,10 +281,13 @@ module Cookie : sig
        ?encrypted:bool
     -> name:string
     -> S.t
-    -> ('c, 'a) Request.t
+    -> Request.request
     -> ( string
        , [> `Invalid_encrypted_cookie | `Msg of string | `Not_found ] )
        result
+
+  val pp_error :
+    [ `Invalid_encrypted_cookie | `Msg of string | `Not_found ] Fmt.t
 
   val set :
        ?encrypt:bool

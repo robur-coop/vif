@@ -192,7 +192,7 @@ let rec user's_functions daemon =
       Miou.call ~orphans:daemon.orphans @@ fun () ->
       let response = fn daemon.server daemon.user's_value in
       match Vif_response.(run req0 empty) response with
-      | Vif_response.Sent, () -> ()
+      | Vif_response.Sent, () -> Vif_request0.close req0
     in
     ()
   in
