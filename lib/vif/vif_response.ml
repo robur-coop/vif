@@ -161,7 +161,10 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
         headers := (k, v) :: Vif_headers.rem !headers k;
         (state, ())
     | Empty, Stream stream -> (Filled stream, ())
-    | Empty, String str -> (Filled (Stream.Stream.singleton str), ())
+    | Empty, String str ->
+        if Vif_request0.version req = 1
+        then headers := Vif_headers.add_unless_exists !headers "connection" "close";
+        (Filled (Stream.Stream.singleton str), ())
     | Filled stream, Respond status ->
         let headers = !headers in
         let headers, stream =

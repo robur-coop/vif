@@ -75,7 +75,7 @@ let default req target server _cfg =
   | None ->
       let field = "content-type" in
       let* () = Response.add ~field "text/plain; charset=utf-8" in
-      let* () = Response.with_string req "Unauthorized place" in
+      let* () = Response.with_string req "Unauthorized place\n" in
       Response.respond `Unauthorized
   | Some { username } ->
       let field = "content-type" in
