@@ -9,6 +9,9 @@
   jsonm
   cmdliner
   hmap
+  fpath
+  conan-database.light
+  conan-unix
   decompress.zl
   decompress.gz
   mirage-crypto-rng-miou-unix

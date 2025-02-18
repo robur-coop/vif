@@ -261,7 +261,7 @@ let dispatch : type r c.
         default request target
     | Some subs -> begin
         try find_and_trigger ~original:target ~request subs wl
-        with exn ->
+        with Not_found as exn ->
           Log.debug (fun m ->
               m "Fallback to the default route (exn: %s)"
                 (Printexc.to_string exn));

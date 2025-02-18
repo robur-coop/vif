@@ -12,7 +12,7 @@ let sha1 =
   Sink { init; push; full; stop }
 ;;
 
-let default req target server () =
+let default req server () =
   let stream = Request.stream req in
   let hash = Stream.Stream.into sha1 stream in
   let field = "content-type" in
@@ -21,5 +21,12 @@ let default req target server () =
   Response.respond `OK
 ;;
 
+let routes =
+  let open Vif.U in
+  let open Vif.R in
+  let open Vif.Content_type in
+  [ post any (rel /?? nil) --> default ]
+
 let () = Miou_unix.run @@ fun () ->
-  Vif.run ~default [] () ;;
+  Vif.run routes ()
+;;

@@ -53,12 +53,6 @@ let list req server _cfg =
     Response.respond `Internal_server_error
 ;;
 
-let default req target server _ =
-  let str = Fmt.str "%s not found\n" target in
-  let* () = Response.with_string req str in
-  Response.respond `Not_found 
-;;
-
 let routes =
   let open Vif.U in
   let open Vif.R in
@@ -71,5 +65,5 @@ let () =
   Caqti_miou.Switch.run @@ fun sw ->
   let uri = Uri.of_string "sqlite3:foo.sqlite?create=false" in
   let cfg = { sw; uri } in
-  Vif.run ~default ~devices:Vif.Ds.[ caqti ] routes cfg
+  Vif.run ~devices:Vif.Ds.[ caqti ] routes cfg
 ;;

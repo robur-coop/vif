@@ -1,5 +1,11 @@
 module U : sig
   type 'a atom = 'a Tyre.t
+
+  val int : int atom
+  val string : string atom
+  val option : 'a atom -> 'a option atom
+  val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
+
   type ('f, 'r) path
 
   val rel : ('r, 'r) path
@@ -300,6 +306,17 @@ module Cookie : sig
     -> ('p, 'p, unit) Response.t
 end
 
+module Handler : sig
+  type ('c, 'value) t =
+       ('c, string) Request.t
+    -> string
+    -> S.t
+    -> 'value
+    -> (Response.e, Response.s, unit) Response.t option
+
+  val static : ?top:Fpath.t -> ('c, 'value) t
+end
+
 type config
 type e = Response.e
 type f = Response.f
@@ -328,12 +345,7 @@ val run :
      ?cfg:config
   -> ?devices:'value Ds.t
   -> ?middlewares:'value Ms.t
-  -> default:
-       (   ('c, string) Request.t
-        -> string
-        -> S.t
-        -> 'value
-        -> (e, s, unit) Response.t)
+  -> ?handlers:('c, 'value) Handler.t list
   -> (S.t -> 'value -> (e, s, unit) Response.t) R.route list
   -> 'value
   -> unit

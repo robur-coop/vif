@@ -52,10 +52,4 @@ let routes =
   [ post (json_encoding foo) (rel /?? nil) --> deserialize ]
 ;;
 
-let default req target _server () =
-  let str = Fmt.str "%s not found\n" target in
-  let* () = Response.with_string req str in
-  Response.respond `Not_found
-;;
-
-let () = Miou_unix.run @@ fun () -> Vif.run ~default routes () ;;
+let () = Miou_unix.run @@ fun () -> Vif.run routes () ;;

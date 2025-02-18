@@ -9,12 +9,19 @@ let foo =
 
 open Vif ;;
 
-let default req target server () =
+let default req server () =
   let Foo = Vif.S.device foo server in
   let* () = Response.with_string req "ok\n" in
   Response.respond `OK
 ;;
 
+let routes =
+  let open Vif.U in
+  let open Vif.R in
+  let open Vif.Content_type in
+  [ get (rel /?? nil) --> default ]
+
 let () =
-  Miou_unix.run @@ fun () -> Vif.run ~default ~devices:Vif.Ds.[ foo ] [] ()
+  Miou_unix.run @@ fun () ->
+  Vif.run ~devices:Vif.Ds.[ foo ] routes ()
 ;;

@@ -78,6 +78,7 @@ module Headers = Vif_headers
 module Request = Vif_request
 module Response = Vif_response
 module Cookie = Vif_cookie
+module Handler = Vif_handler
 
 type e = Response.e = Empty
 type f = Response.f = Filled
@@ -95,6 +96,8 @@ let content_type req0 =
   let c = Option.map (fun c -> c ^ "\r\n") c in
   let c = Option.to_result ~none:`Not_found c in
   Result.bind c Multipart_form.Content_type.of_string
+
+[@@@warning "-8"]
 
 let recognize_request ~env req0 =
   let extract : type c a.
@@ -190,9 +193,11 @@ let rec user's_functions daemon =
   let fn (User's_task (req0, fn)) =
     let _prm =
       Miou.call ~orphans:daemon.orphans @@ fun () ->
-      let response = fn daemon.server daemon.user's_value in
-      match Vif_response.(run req0 empty) response with
+      match
+        Vif_response.(run req0 empty) (fn daemon.server daemon.user's_value)
+      with
       | Vif_response.Sent, () -> Vif_request0.close req0
+      | exception exn -> Vif_request0.report_exn req0 exn
     in
     ()
   in
@@ -240,8 +245,40 @@ let store_pid = function
       output_string oc (string_of_int (Unix.getpid ()));
       close_out oc
 
+let default req target _server _user's_value =
+  let pp_field ppf (k, v) =
+    let v = String.split_on_char ' ' v in
+    let v = List.map (String.split_on_char '\t') v in
+    let v = List.flatten v in
+    let v = List.filter_map (function "" -> None | v -> Some v) v in
+    Fmt.pf ppf "%s: @[<hov>%a@]%!" k Fmt.(list ~sep:(any "@ ") string) v
+  in
+  let str =
+    Fmt.str "Unspecified destination %s (%a):\n%a\n" target Vif_method.pp
+      (Vif_request.meth req)
+      Fmt.(list ~sep:(any "\n") pp_field)
+      (Vif_request.headers req)
+  in
+  let len = String.length str in
+  let field = "content-type" in
+  let* () = Vif_response.add ~field "text/plain; charset=utf-8" in
+  let field = "content-length" in
+  let* () = Vif_response.add ~field (string_of_int len) in
+  let* () = Vif_response.with_string req str in
+  Vif_response.respond `Not_found
+
+let default_from_handlers handlers req target server user's_value =
+  let fn acc handler =
+    match acc with
+    | Some _ as acc -> acc
+    | None -> handler req target server user's_value
+  in
+  match List.fold_left fn None handlers with
+  | Some p -> p
+  | None -> default req target server user's_value
+
 let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
-    ?(middlewares = Ms.[]) ~default routes user's_value =
+    ?(middlewares = Ms.[]) ?(handlers = []) routes user's_value =
   let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
@@ -275,6 +312,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
     ; server
     }
   in
+  let default = default_from_handlers handlers in
   let user's_tasks = Miou.call @@ fun () -> user's_functions daemon in
   let fn0 = handler cfg ~default ~middlewares routes daemon in
   let prm0 = Miou.async @@ fun () -> handle stop cfg fn0 in

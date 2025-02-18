@@ -81,6 +81,11 @@ let request_body { reqd; _ } =
   | `V1 reqd -> `V1 (H1.Reqd.request_body reqd)
   | `V2 reqd -> `V2 (H2.Reqd.request_body reqd)
 
+let report_exn { reqd; _ } exn =
+  match reqd with
+  | `V1 reqd -> H1.Reqd.report_exn reqd exn
+  | `V2 reqd -> H2.Reqd.report_exn reqd exn
+
 let version { request; _ } = match request with V1 _ -> 1 | V2 _ -> 2
 let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost

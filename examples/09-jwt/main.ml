@@ -70,7 +70,7 @@ let login req server { secret }=
       Response.respond (`Code 422)
 ;;
 
-let default req target server _cfg =
+let default req server _cfg =
   match Request.get jwt req with
   | None ->
       let field = "content-type" in
@@ -89,9 +89,11 @@ let routes =
   let open Vif.U in
   let open Vif.R in
   let open Vif.Content_type in
-  [ post (json_encoding credential) (rel / "login" /?? nil) --> login ]
+  [ post (json_encoding credential) (rel / "login" /?? nil) --> login
+  ; get (rel /?? nil) --> default ]
 ;;
 
 let () = Miou_unix.run @@ fun () ->
   let secret = "deadbeef" in
-  Vif.run ~default ~middlewares:Ms.[ jwt ] routes { secret } ;;
+  Vif.run ~middlewares:Ms.[ jwt ] routes { secret }
+;;

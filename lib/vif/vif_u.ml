@@ -61,6 +61,11 @@ let ( /% ) = Path.add_atom
 let ( /? ) path query = Url.make ~slash:No_slash path query
 let ( //? ) path query = Url.make ~slash:Slash path query
 let ( /?? ) path query = Url.make ~slash:Maybe_slash path query
+let int = Tyre.int
+let string = Tyre.(regex Re.(rep1 @@ compl [ char '/' ]))
+let bool = Tyre.bool
+let option = Tyre.opt
+let conv = Tyre.conv
 let eval_atom p x = Tyre.(eval (Internal.to_t p) x)
 
 let eval_top_atom : type a. a Tyre.Internal.raw -> a -> string list = function
