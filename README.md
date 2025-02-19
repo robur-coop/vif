@@ -1,4 +1,6 @@
-# Vif, a small framework for building a web server from an OCaml script
+# νιϝ, a small framework for building a web server from an OCaml script
+
+(nu)(iota)(digamma)
 
 **disclaimer**: Please note that this is an experimental project. It's also an
 opportunity to build something that can be satisfying for web development.

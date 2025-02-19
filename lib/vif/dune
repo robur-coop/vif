@@ -15,5 +15,6 @@
   decompress.zl
   decompress.gz
   mirage-crypto-rng-miou-unix
+  multipart_form-miou
   httpcats
   tyre))

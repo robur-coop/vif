@@ -72,36 +72,24 @@ let compression alg req =
   match alg with
   | `DEFLATE when can_compress "deflate" req ->
       let* () = set ~field:"content-encoding" "deflate" in
+      let* () = rem ~field:"content-length" in
       return true
   | `DEFLATE -> return false
 
 let with_stream ?compression:alg req stream =
-  match alg with
-  | Some alg ->
-      let* _ = compression alg req in
-      let field = "transfer-encoding" in
-      let v = "chunked" in
-      let* _ = add_unless_exists ~field v in
-      Stream stream
-  | None ->
-      let field = "transfer-encoding" in
-      let v = "chunked" in
-      let* _ = add_unless_exists ~field v in
-      Stream stream
+  let none = return false in
+  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+  let field = "transfer-encoding" in
+  let v = "chunked" in
+  let* _ = add_unless_exists ~field v in
+  Stream stream
 
 let with_string ?compression:alg req str =
-  match alg with
-  | Some alg ->
-      let* _ = compression alg req in
-      let field = "content-length" in
-      let v = string_of_int (String.length str) in
-      let* _ = add_unless_exists ~field v in
-      String str
-  | None ->
-      let field = "content-length" in
-      let v = string_of_int (String.length str) in
-      let* _ = add_unless_exists ~field v in
-      String str
+  let field = "content-length" in
+  let* () = add ~field (string_of_int (String.length str)) in
+  let none = return false in
+  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+  String str
 
 let response ?headers:(hdrs = []) status req0 =
   match Vif_request0.reqd req0 with
@@ -130,7 +118,6 @@ let response ?headers:(hdrs = []) status req0 =
         body
       in
       let full _ = false in
-      (* TODO(dinosaure): content-length? *)
       let stop = H2.Body.Writer.close in
       (Sink { init; push; full; stop } : (string, unit) Stream.sink)
 

@@ -4,16 +4,13 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type ('c, 'a) t = {
     body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
-  ; encoding: ('c, 'a) Vif_content_type.t
+  ; encoding: ('c, 'a) Vif_t.t
   ; env: Vif_m.Hmap.t
   ; request: Vif_request0.t
 }
 
 let of_req0 : type c a.
-       encoding:(c, a) Vif_content_type.t
-    -> env:Vif_m.Hmap.t
-    -> Vif_request0.t
-    -> (c, a) t =
+    encoding:(c, a) Vif_t.t -> env:Vif_m.Hmap.t -> Vif_request0.t -> (c, a) t =
  fun ~encoding ~env request ->
   let body = Vif_request0.request_body request in
   { request; body; encoding; env }
@@ -34,8 +31,8 @@ let destruct : type a. a Json_encoding.encoding -> Json.t -> a =
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
-let of_json : type a.
-    (Vif_content_type.json, a) t -> (a, [> `Msg of string ]) result = function
+let of_json : type a. (Vif_t.json, a) t -> (a, [> `Msg of string ]) result =
+  function
   | { encoding= Any; _ } as req -> Ok (to_string req)
   | { encoding= Json; _ } as req ->
       let stream = stream req in

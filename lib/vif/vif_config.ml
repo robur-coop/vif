@@ -9,6 +9,7 @@ type config = {
   ; sockaddr: Unix.sockaddr
   ; pid: Fpath.t option
   ; cookie_key: Mirage_crypto.AES.GCM.key
+  ; domains: int
 }
 
 let really_bad_secret =
@@ -17,8 +18,10 @@ let really_bad_secret =
   let hash = SHA256.to_raw_string hash in
   Mirage_crypto.AES.GCM.of_secret hash
 
-let config ?(cookie_key = really_bad_secret) ?pid ?http ?tls ?(backlog = 64)
-    sockaddr =
+let default_domains = Int.min (Stdlib.Domain.recommended_domain_count ()) 4
+
+let config ?(domains = default_domains) ?(cookie_key = really_bad_secret) ?pid
+    ?http ?tls ?(backlog = 64) sockaddr =
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
@@ -26,4 +29,4 @@ let config ?(cookie_key = really_bad_secret) ?pid ?http ?tls ?(backlog = 64)
     | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
     | None -> None
   in
-  { http; tls; backlog; sockaddr; pid; cookie_key }
+  { http; tls; backlog; sockaddr; pid; cookie_key; domains }

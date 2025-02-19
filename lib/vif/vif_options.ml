@@ -3,16 +3,18 @@ let port = ref 8080
 let inet_addr = ref Unix.inet_addr_loopback
 let backlog = ref 64
 let pid = ref None
+let domains = ref None
 
-let setup_config port' inet_addr' backlog' pid' =
+let setup_config domains' port' inet_addr' backlog' pid' =
   port := port';
   inet_addr := inet_addr';
   backlog := backlog';
-  pid := pid'
+  pid := pid';
+  domains := domains'
 
 let config_from_globals () =
   let sockaddr = Unix.(ADDR_INET (!inet_addr, !port)) in
-  Vif_config.config ?pid:!pid ~backlog:!backlog sockaddr
+  Vif_config.config ?domains:!domains ?pid:!pid ~backlog:!backlog sockaddr
 
 open Cmdliner
 
@@ -34,13 +36,17 @@ let inet_addr =
   & opt inet_addr Unix.inet_addr_loopback
   & info [ "i"; "inet-addr" ] ~doc ~docv:"INET_ADDR"
 
+let is_not_directory str =
+  (Sys.file_exists str && Sys.is_directory str = false)
+  || Sys.file_exists str = false
+
 let pid =
   let doc = "Specify a file to record its process-id in." in
   let non_existing_file =
     let parser str =
       match Fpath.of_string str with
-      | Ok _ as v when Sys.file_exists str = false -> v
-      | Ok v -> error_msgf "%a already exists" Fpath.pp v
+      | Ok _ as v when is_not_directory str -> v
+      | Ok v -> error_msgf "%a already exists as a directory" Fpath.pp v
       | Error _ as err -> err
     in
     Arg.conv (parser, Fpath.pp)
@@ -49,6 +55,11 @@ let pid =
   value
   & opt (some non_existing_file) None
   & info [ "pid-file" ] ~doc ~docv:"PATH"
+
+let domains =
+  let doc = "The number of number used by vif." in
+  let open Arg in
+  value & opt (some int) None & info [ "domains" ] ~doc ~docv:"DOMAINS"
 
 let backlog =
   let doc =
@@ -59,4 +70,4 @@ let backlog =
 
 let setup_config =
   let open Term in
-  const setup_config $ port $ inet_addr $ backlog $ pid
+  const setup_config $ domains $ port $ inet_addr $ backlog $ pid

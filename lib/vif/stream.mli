@@ -31,6 +31,7 @@ type ('a, 'r) sink =
 
 module Sink : sig
   val json : unit -> (string, (Json.t, [ `Msg of string ]) result) sink
+  val into_bstream : 'a Multipart_form_miou.Bounded_stream.t -> ('a, unit) sink
   val string : (string, string) sink
 end
 

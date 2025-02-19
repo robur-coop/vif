@@ -178,6 +178,17 @@ module Sink = struct
     let stop = Buffer.contents in
     Sink { init; push; full; stop }
 
+  let into_bstream bstream =
+    let open Multipart_form_miou in
+    let init () = bstream in
+    let push bstream str =
+      Bounded_stream.put bstream (Some str);
+      bstream
+    in
+    let full = Fun.const false in
+    let stop bstream = Bounded_stream.put bstream None in
+    Sink { init; push; full; stop }
+
   let json () =
     let decoder = Jsonm.decoder `Manual in
     let rec error (`Error err) =

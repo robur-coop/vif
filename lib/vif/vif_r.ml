@@ -208,7 +208,7 @@ let extract t =
 
 type ('fu, 'return) req =
   | Request :
-      Vif_method.t option * ('c, 'a) Vif_content_type.t
+      Vif_method.t option * ('c, 'a) Vif_t.t
       -> (('c, 'a) Vif_request.t -> 'r, 'r) req
 
 type 'r route = Route : ('f, 'x) req * ('x, 'r) Vif_u.t * 'f -> 'r route
@@ -228,21 +228,27 @@ let rec build_info_list idx = function
 type request = {
     extract:
       'c 'a.
-         Vif_method.t option
-      -> ('c, 'a) Vif_content_type.t
-      -> ('c, 'a) Vif_request.t option
+      Vif_method.t option -> ('c, 'a) Vif_t.t -> ('c, 'a) Vif_request.t option
 }
 
 let rec find_and_trigger : type r.
-    original:string -> request:request -> Re.Group.t -> r re list -> r =
- fun ~original ~request subs -> function
+       original:string
+    -> uid:int
+    -> request:request
+    -> Re.Group.t
+    -> r re list
+    -> r =
+ fun ~original ~uid ~request subs -> function
   | [] -> raise Not_found
   | Re (Request (meth, c), f, id, ret) :: l ->
+      Log.debug (fun m ->
+          m "%S matches with %a (%03d)? %b" original Re.Group.pp subs uid
+            (Re.Mark.test subs id));
       if Re.Mark.test subs id then
         match request.extract meth c with
         | Some request -> extract ~original ret subs (f request)
-        | None -> find_and_trigger ~original ~request subs l
-      else find_and_trigger ~original ~request subs l
+        | None -> find_and_trigger ~original ~uid:(succ uid) ~request subs l
+      else find_and_trigger ~original ~uid:(succ uid) ~request subs l
 
 let dispatch : type r c.
        default:((c, string) Vif_request.t -> string -> r)
@@ -260,7 +266,7 @@ let dispatch : type r c.
         let[@warning "-8"] (Some request) = request.extract None Any in
         default request target
     | Some subs -> begin
-        try find_and_trigger ~original:target ~request subs wl
+        try find_and_trigger ~original:target ~uid:0 ~request subs wl
         with Not_found as exn ->
           Log.debug (fun m ->
               m "Fallback to the default route (exn: %s)"

@@ -32,6 +32,8 @@ let all_cookies hdrs =
 let guard error fn = if fn () then Ok () else Error error
 let err_cookie = `Invalid_encrypted_cookie
 
+type error = [ `Invalid_encrypted_cookie | `Msg of string | `Not_found ]
+
 let pp_error ppf = function
   | `Invalid_encrypted_cookie -> Fmt.string ppf "Invalid encrypted cookie"
   | `Not_found -> Fmt.string ppf "Cookie not found"

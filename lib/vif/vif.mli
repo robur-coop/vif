@@ -51,14 +51,33 @@ module Method : sig
     | `Other of string ]
 end
 
-module Content_type : sig
+module Multipart_form : sig
+  type 'a t
+  type 'a atom
+
+  val string : string atom
+
+  type ('a, 'b, 'c) orecord
+
+  val record : 'b -> ('a, 'b, 'b) orecord
+
+  type 'a field
+
+  val field : string -> 'a atom -> 'a field
+  val ( |+ ) : ('a, 'b, 'c -> 'd) orecord -> 'c field -> ('a, 'b, 'd) orecord
+  val sealr : ('a, 'b, 'a) orecord -> 'a t
+end
+
+module T : sig
   type null
   type json
+  type multipart_form
   type ('c, 'a) t
 
   val null : (null, unit) t
   val json : (json, Json.t) t
   val json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
+  val m : 'a Multipart_form.t -> (multipart_form, 'a) t
   val any : ('c, string) t
 end
 
@@ -73,7 +92,12 @@ module Request : sig
   val meth : ('c, 'a) t -> Method.t
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
-  val of_json : (Content_type.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val of_json : (T.json, 'a) t -> ('a, [ `Msg of string ]) result
+
+  val of_multipart_form :
+       (T.multipart_form, 'a) t
+    -> ('a, [ `Not_found of string | `Invalid_multipart_form ]) result
+
   val stream : ('c, 'a) t -> string Stream.stream
   val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
 
@@ -87,21 +111,10 @@ end
 module R : sig
   type 'r route
   type ('fu, 'return) t
-  type request
 
-  val get : ('x, 'r) U.t -> ((Content_type.null, unit) Request.t -> 'x, 'r) t
-
-  val post :
-    ('c, 'a) Content_type.t -> ('x, 'r) U.t -> (('c, 'a) Request.t -> 'x, 'r) t
-
+  val get : ('x, 'r) U.t -> ((T.null, unit) Request.t -> 'x, 'r) t
+  val post : ('c, 'a) T.t -> ('x, 'r) U.t -> (('c, 'a) Request.t -> 'x, 'r) t
   val ( --> ) : ('f, 'r) t -> 'f -> 'r route
-
-  val dispatch :
-       default:(('c, string) Request.t -> string -> 'r)
-    -> 'r route list
-    -> request:request
-    -> target:string
-    -> 'r
 end
 
 module C : sig
@@ -137,11 +150,11 @@ module C : sig
         let readme =
           let open U in
           host "raw.githubusercontent.com"
-          /% Tyre.string
-          /% Tyre.string
+          /% string
+          /% string
           / "refs"
           / "heads"
-          /% Tyre.string
+          /% string
           / "README.md"
           /?? nil
 
@@ -151,6 +164,19 @@ module C : sig
 end
 
 module D : sig
+  (** {3 Devices.}
+
+      A device is a global instance on the http server with which a "finaliser"
+      is associated. A device is available from all requests from a {!type:S.t}
+      value. The same device instance is available from all domains —
+      interactions with a device must therefore be {i domain-safe}.
+
+      A device can be created from several values as well as from other devices.
+      Finally, a device is constructed from an end-user value specified by
+      {!val:Vif.run}. The idea is to allow the user to construct a value (from,
+      for example, command line parameters) corresponding to a configuration and
+      to construct these devices from this value. *)
+
   type ('value, 'a) arg
   type ('value, 'a) device
 
@@ -245,6 +271,14 @@ module Status : sig
 end
 
 module Response : sig
+  (** {3 Response.}
+
+      A response is a construction (monad) whose initial state is {i empty}
+      ({!type:e}) and must end in the state {i sent} ({!type:s}). Throughout
+      this construction, the user can {!val:add}/{!val:rem}/{!val:set}
+      information in the {i header}. Finally, the user must respond with content
+      (via {!val:with_string}/{!val:with_stream}) and a status code. *)
+
   type ('p, 'q, 'a) t
   type e
   type f
@@ -258,6 +292,13 @@ module Response : sig
 
   val with_string :
     ?compression:[< `DEFLATE ] -> ('c, 'a) Request.t -> string -> (e, f, unit) t
+
+  val with_file :
+       ?mime:string
+    -> ?compression:[< `DEFLATE ]
+    -> ('c, 'a) Request.t
+    -> Fpath.t
+    -> (e, s, unit) t
 
   val respond : Status.t -> (f, s, unit) t
 
@@ -283,17 +324,16 @@ module Cookie : sig
     -> unit
     -> config
 
+  type error = [ `Invalid_encrypted_cookie | `Msg of string | `Not_found ]
+
   val get :
        ?encrypted:bool
     -> name:string
     -> S.t
     -> Request.request
-    -> ( string
-       , [> `Invalid_encrypted_cookie | `Msg of string | `Not_found ] )
-       result
+    -> (string, [> error ]) result
 
-  val pp_error :
-    [ `Invalid_encrypted_cookie | `Msg of string | `Not_found ] Fmt.t
+  val pp_error : error Fmt.t
 
   val set :
        ?encrypt:bool
@@ -330,7 +370,8 @@ val ( let* ) :
 val return : 'a -> ('p, 'p, 'a) Response.t
 
 val config :
-     ?cookie_key:Mirage_crypto.AES.GCM.key
+     ?domains:int
+  -> ?cookie_key:Mirage_crypto.AES.GCM.key
   -> ?pid:Fpath.t
   -> ?http:
        [ `H1 of H1.Config.t

@@ -6,7 +6,7 @@ module U = Vif_u
 
 module R = struct
   include Vif_r
-  open Vif_content_type
+  open Vif_t
 
   type ('fu, 'return) t =
     | Handler : ('f, 'x) Vif_r.req * ('x, 'r) Vif_u.t -> ('f, 'r) t
@@ -70,13 +70,51 @@ module Ms = struct
       end
 end
 
-module Content_type = Vif_content_type
+module T = Vif_t
 module Stream = Stream
 module Method = Vif_method
 module Status = Vif_status
 module Headers = Vif_headers
-module Request = Vif_request
-module Response = Vif_response
+
+module Response = struct
+  include Vif_response
+
+  let mime_type path =
+    let default = "application/octet-stream" in
+    match Conan_unix.run_with_tree Conan_light.tree (Fpath.to_string path) with
+    | Ok m -> Option.value ~default (Conan.Metadata.mime m)
+    | Error _ -> default
+    | exception _ -> default
+
+  let with_file ?mime ?compression:alg req path =
+    if
+      Sys.file_exists (Fpath.to_string path) = false
+      || Sys.is_directory (Fpath.to_string path)
+    then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
+    if Vif_handler.cache req path then
+      let* () = with_string req "" in
+      respond `Not_modified
+    else
+      let mime = Option.value ~default:(mime_type path) mime in
+      let src = Stream.Source.file (Fpath.to_string path) in
+      let src = Stream.Stream.from src in
+      let field = "connection" in
+      let* () =
+        if Vif_request.version req = 1 then add ~field "close" else return ()
+      in
+      let field = "content-type" in
+      let* () = add ~field mime in
+      let stat = Unix.stat (Fpath.to_string path) in
+      let field = "content-length" in
+      let* () = add ~field (string_of_int stat.Unix.st_size) in
+      let none = return false in
+      let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+      let field = "etag" in
+      let* () = add ~field (Vif_handler.sha256sum path) in
+      let* () = with_stream req src in
+      respond `OK
+end
+
 module Cookie = Vif_cookie
 module Handler = Vif_handler
 
@@ -90,6 +128,11 @@ let return = Response.return
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
 
+let is_multipart_form_data { Multipart_form.Content_type.ty; subty; _ } =
+  match (ty, subty) with
+  | `Multipart, `Iana_token "form-data" -> true
+  | _ -> false
+
 let content_type req0 =
   let headers = Vif_request0.headers req0 in
   let c = Vif_headers.get headers "content-type" in
@@ -97,52 +140,124 @@ let content_type req0 =
   let c = Option.to_result ~none:`Not_found c in
   Result.bind c Multipart_form.Content_type.of_string
 
-[@@@warning "-8"]
-
 let recognize_request ~env req0 =
   let extract : type c a.
-         Vif_method.t option
-      -> (c, a) Vif_content_type.t
-      -> (c, a) Vif_request.t option =
+      Vif_method.t option -> (c, a) Vif_t.t -> (c, a) Vif_request.t option =
    fun meth c ->
-    let meth' = Vif_request0.meth req0 in
-    match (meth, meth', c) with
-    | None, _, (Vif_content_type.Any as encoding) ->
-        Some (Vif_request.of_req0 ~encoding ~env req0)
-    | Some a, b, (Vif_content_type.Any as encoding) ->
-        if a = b then Some (Vif_request.of_req0 ~encoding ~env req0) else None
-    | None, _, (Null as encoding) ->
-        Some (Vif_request.of_req0 ~encoding ~env req0)
-    | Some a, b, (Null as encoding) ->
-        if a = b then Some (Vif_request.of_req0 ~encoding ~env req0) else None
-    | None, _, (Json_encoding _ as encoding) ->
-        let c = content_type req0 in
-        let application_json = Result.map is_application_json c in
-        let application_json = Result.value ~default:false application_json in
-        if application_json then Some (Vif_request.of_req0 ~encoding ~env req0)
+    let none = true in
+    let some = ( = ) (Vif_request0.meth req0) in
+    let meth_match = Option.fold ~none ~some meth in
+    Log.debug (fun m -> m "method matches? %b" meth_match);
+    match c with
+    | Vif_t.Any as encoding ->
+        if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Some a, b, (Json_encoding _ as encoding) ->
+    | Null as encoding ->
+        if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
+        else None
+    | Json_encoding _ as encoding ->
         let c = content_type req0 in
-        let application_json = Result.map is_application_json c in
-        let application_json = Result.value ~default:false application_json in
-        if application_json && a = b then
+        let type_match = Result.map is_application_json c in
+        let type_match = Result.value ~default:false type_match in
+        if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | None, _, (Json as encoding) ->
+    | Multipart_form_encoding _ as encoding ->
         let c = content_type req0 in
-        let application_json = Result.map is_application_json c in
-        let application_json = Result.value ~default:false application_json in
-        if application_json then Some (Vif_request.of_req0 ~encoding ~env req0)
-        else None
-    | Some a, b, (Json as encoding) ->
-        let c = content_type req0 in
-        let application_json = Result.map is_application_json c in
-        let application_json = Result.value ~default:false application_json in
-        if application_json && a = b then
+        let type_match = Result.map is_multipart_form_data c in
+        let type_match = Result.value ~default:false type_match in
+        if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
+    | Json as encoding ->
+        let c = content_type req0 in
+        let type_match = Result.map is_application_json c in
+        let type_match = Result.value ~default:false type_match in
+        if type_match && meth_match then
+          Some (Vif_request.of_req0 ~encoding ~env req0)
+        else None
+    | Multipart_form -> assert false (* TODO *)
   in
   { Vif_r.extract }
+
+module Multipart_form = struct
+  include Vif_multipart_form
+
+  let parse req =
+    let open Multipart_form_miou in
+    let hdrs = Vif_request.headers req in
+    let ct =
+      match Vif_headers.get hdrs "content-type" with
+      | None -> Fmt.invalid_arg "Content-type field missing"
+      | Some str ->
+          let ct = Multipart_form.Content_type.of_string (str ^ "\r\n") in
+          Result.get_ok ct
+    in
+    let t = Bounded_stream.create 0x100 in
+    let prm0 =
+      Miou.async @@ fun () ->
+      let open Stream in
+      Stream.into (Sink.into_bstream t) (Vif_request.stream req)
+    in
+    let prm1 = Miou.async @@ fun () -> of_stream_to_list t ct in
+    Miou.await_exn prm0;
+    match Miou.await_exn prm1 with
+    | Ok (_tree, lst) ->
+        let fn (_id, hdrs) =
+          let hdrs = Multipart_form.Header.to_list hdrs in
+          let name = ref None in
+          let filename = ref None in
+          let size = ref None in
+          let mime = ref None in
+          let fn = function
+            | Multipart_form.Field.Field (_, Content_type, { ty; subty; _ }) ->
+                let open Multipart_form.Content_type in
+                let value = Fmt.str "%a/%a" Type.pp ty Subtype.pp subty in
+                mime := Some value;
+                None
+            | Field (_, Content_encoding, _) -> None
+            | Field (_, Content_disposition, t) ->
+                let open Multipart_form in
+                name := Content_disposition.name t;
+                filename := Content_disposition.filename t;
+                size := Content_disposition.size t;
+                None
+            | Field (fn, Field, unstrctrd) ->
+                let k = (fn :> string) in
+                let v = Unstrctrd.fold_fws unstrctrd in
+                let v = Unstrctrd.to_utf_8_string v in
+                Some (k, v)
+          in
+          let hdrs = List.filter_map fn hdrs in
+          let meta =
+            { name= !name; filename= !filename; size= !size; mime= !mime }
+          in
+          (meta, hdrs)
+        in
+        Ok (List.map (fun (k, v) -> (fn k, v)) lst)
+    | Error (`Msg msg) ->
+        Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
+        Error `Invalid_multipart_form
+end
+
+module Request = struct
+  include Vif_request
+
+  let of_multipart_form : type a.
+         (Vif_t.multipart_form, a) Vif_request.t
+      -> (a, [> `Invalid_multipart_form | `Not_found of string ]) result =
+    function
+    | { encoding= Multipart_form_encoding r; _ } as req ->
+        let ( let* ) = Result.bind in
+        let* raw = Multipart_form.parse req in
+        begin
+          try Ok (Multipart_form.get_record r raw)
+          with Multipart_form.Field_not_found field ->
+            Error (`Not_found field)
+        end
+    | { encoding= Multipart_form; _ } -> assert false
+    | { encoding= Any; _ } -> assert false
+end
 
 type 'value daemon = {
     queue: 'value user's_function Queue.t
@@ -192,7 +307,7 @@ let rec user's_functions daemon =
   in
   let fn (User's_task (req0, fn)) =
     let _prm =
-      Miou.call ~orphans:daemon.orphans @@ fun () ->
+      Miou.async ~orphans:daemon.orphans @@ fun () ->
       match
         Vif_response.(run req0 empty) (fn daemon.server daemon.user's_value)
       with
@@ -212,6 +327,11 @@ let handler _cfg ~default ~middlewares routes daemon =
     let request = recognize_request ~env req0 in
     let target = Vif_request0.target req0 in
     let fn = R.dispatch ~default routes ~request ~target in
+    (* NOTE(dinosaure): the management of the http request must finish and above
+       all **not** block. Otherwise, the entire domain is blocked. Thus, the
+       management of a new request transfers the user task (which can block) to
+       our "daemon" instantiated in our current domain which runs cooperatively.
+    *)
     begin
       Miou.Mutex.protect daemon.mutex @@ fun () ->
       Queue.push (User's_task (req0, fn)) daemon.queue;
@@ -223,20 +343,41 @@ type config = Vif_config.config
 let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
 let config = Vif_config.config
 
-let handle stop cfg fn =
+let process stop cfg server user's_value fn =
   Logs.debug (fun m ->
       m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
+  let daemon =
+    {
+      queue= Queue.create ()
+    ; mutex= Miou.Mutex.create ()
+    ; orphans= Miou.orphans ()
+    ; condition= Miou.Condition.create ()
+    ; user's_value
+    ; server
+    }
+  in
+  let fn = fn daemon in
+  let user's_tasks = Miou.async @@ fun () -> user's_functions daemon in
+  let parallel = false in
+  (* NOTE(dinosaure): The user task **must** be executed cooperatively (instead
+     of in parallel) with the task managing the new http connection. [httpcats]
+     is therefore instructed to launch the task managing the http connection on
+     the same domain as the [process] domain. *)
   match (cfg.Vif_config.http, cfg.Vif_config.tls) with
   | config, Some tls ->
-      Httpcats.Server.with_tls ?stop ?config ~backlog:cfg.backlog tls
-        ~handler:fn cfg.sockaddr
+      Httpcats.Server.with_tls ~parallel ?stop ?config ~backlog:cfg.backlog tls
+        ~handler:fn cfg.sockaddr;
+      Miou.cancel user's_tasks
   | Some (`H2 _), None ->
+      Miou.cancel user's_tasks;
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      Httpcats.Server.clear ?stop ~config ~handler:fn cfg.sockaddr
+      Httpcats.Server.clear ~parallel ?stop ~config ~handler:fn cfg.sockaddr;
+      Miou.cancel user's_tasks
   | None, None ->
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Httpcats.Server.clear ?stop ~handler:fn cfg.sockaddr
+      Httpcats.Server.clear ~parallel ?stop ~handler:fn cfg.sockaddr;
+      Miou.cancel user's_tasks
 
 let store_pid = function
   | None -> ()
@@ -283,7 +424,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
-  let domains = Miou.Domain.available () in
+  let domains = cfg.domains in
   store_pid cfg.pid;
   let stop =
     match interactive with
@@ -302,31 +443,21 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   let devices = Ds.run Vif_d.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
   let server = { Vif_s.devices; cookie_key= cfg.Vif_config.cookie_key } in
-  let daemon =
-    {
-      queue= Queue.create ()
-    ; mutex= Miou.Mutex.create ()
-    ; orphans= Miou.orphans ()
-    ; condition= Miou.Condition.create ()
-    ; user's_value
-    ; server
-    }
-  in
   let default = default_from_handlers handlers in
-  let user's_tasks = Miou.call @@ fun () -> user's_functions daemon in
-  let fn0 = handler cfg ~default ~middlewares routes daemon in
-  let prm0 = Miou.async @@ fun () -> handle stop cfg fn0 in
+  let fn0 = handler cfg ~default ~middlewares routes in
+  let prm0 = Miou.async @@ fun () -> process stop cfg server user's_value fn0 in
   let tasks =
-    let fn _ = handler cfg ~default ~middlewares routes daemon in
+    let fn _ = handler cfg ~default ~middlewares routes in
     List.init domains fn
   in
   let tasks =
-    if domains > 0 then Miou.parallel (handle stop cfg) tasks else []
+    if domains > 0 then
+      Miou.parallel (process stop cfg server user's_value) tasks
+    else []
   in
   Miou.await_exn prm0;
   List.iter (function Ok () -> () | Error exn -> raise exn) tasks;
   Ds.finally (Vif_d.Devices devices);
-  Miou.cancel user's_tasks;
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options.setup_config
