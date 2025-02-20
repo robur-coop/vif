@@ -219,11 +219,11 @@ type 'r re = Re : ('f, 'x) req * 'f * Re.Mark.t * ('x, 'r) t -> 'r re
 
 let rec build_info_list idx = function
   | [] -> ([], [])
-  | Route (req, t, f) :: l ->
+  | Route (req, t, fn) :: l ->
       let idx, ret, re = url idx t in
       let rel, wl = build_info_list idx l in
       let id, re = Re.mark re in
-      (re :: rel, Re (req, f, id, ret) :: wl)
+      (re :: rel, Re (req, fn, id, ret) :: wl)
 
 type request = {
     extract:
@@ -258,8 +258,35 @@ let dispatch : type r c.
     -> r =
  fun ~default l ->
   let rel, wl = build_info_list 1 l in
-  let re = Re.(compile (whole_string (alt rel))) in
+  let rel = List.map (fun re -> Re.(compile (whole_string re))) rel in
+  let routes = List.combine rel wl in
   fun ~request ~target ->
+    let rec go = function
+      | [] ->
+          let[@warning "-8"] (Some request) = request.extract None Any in
+          default request target
+      | (re, Re (Request (meth, c), fn, id, ret)) :: rest -> begin
+          match Re.exec_opt re target with
+          | Some subs when Re.Mark.test subs id -> begin
+              match request.extract meth c with
+              | Some request -> extract ~original:target ret subs (fn request)
+              | None -> go rest
+            end
+          | _ -> go rest
+        end
+    in
+    go routes
+
+(* TODO(dinosaure): A real method would be to "merge" the routes that are
+   equivalent (structurally and by type) but this would involve implementing an
+   equal function ([Refl]) in [Vif_u] which would be... laborious. We are
+   therefore satisfied with testing several regexes instead of compiling only
+   one (with [Re.alt]) as was the case initially.
+
+   The case we are trying to solve and the possibility of defining the same
+   route but managing different content (managing a form or JSON). *)
+
+(*
     match Re.exec_opt re target with
     | None ->
         Log.debug (fun m -> m "Fallback to the default route");
@@ -274,3 +301,4 @@ let dispatch : type r c.
           let[@warning "-8"] (Some request) = request.extract None Any in
           default request target
       end
+*)
