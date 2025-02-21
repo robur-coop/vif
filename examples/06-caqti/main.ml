@@ -56,7 +56,7 @@ let list req server _cfg =
 let routes =
   let open Vif.U in
   let open Vif.R in
-  let open Vif.Content_type in
+  let open Vif.T in
   [ post any (rel / "add" /% Tyre.int /?? nil) --> add
   ; get (rel /?? nil) --> list ]
 

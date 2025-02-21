@@ -24,7 +24,7 @@ let default req server () =
 let routes =
   let open Vif.U in
   let open Vif.R in
-  let open Vif.Content_type in
+  let open Vif.T in
   [ post any (rel /?? nil) --> default ]
 
 let () = Miou_unix.run @@ fun () ->

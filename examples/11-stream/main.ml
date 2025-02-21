@@ -13,7 +13,7 @@ let cat req server _ =
 let routes =
   let open Vif.U in
   let open Vif.R in
-  let open Vif.Content_type in
+  let open Vif.T in
   [ post any (rel /?? nil) --> cat ]
 ;;
 
