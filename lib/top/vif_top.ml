@@ -4,6 +4,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type cfg = { stdlib: Fpath.t; roots: string list }
 
+external reraise : exn -> 'a = "%reraise"
+
 let errors = ref false
 
 module Lexbuf = struct
@@ -49,6 +51,9 @@ module Lexbuf = struct
     { default_mapper with location }
 end
 
+let pp_location ppf { Lexing.pos_fname; pos_lnum; pos_bol; _ } =
+  Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum pos_bol
+
 module Phrase = struct
   open Lexing
   open Parsetree
@@ -79,6 +84,9 @@ module Phrase = struct
             match error_of_exn exn with
             | None -> raise exn
             | Some error ->
+                Log.err (fun m ->
+                    m "Shift (%a) syntax error: %s" pp_location startpos
+                      (Printexc.to_string exn));
                 Location.Error (Lexbuf.shift_location_error startpos error)
           in
           begin
@@ -292,7 +300,17 @@ let cut_into_phrases lst =
   in
   go [] [] lst
 
-let eval cfg cmd =
+let retrieve_report exn =
+  let rec loop n exn =
+    match Location.error_of_exn exn with
+    | None -> reraise exn
+    | Some `Already_displayed -> None
+    | Some (`Ok report) -> Some report
+    | exception exn when n > 0 -> loop (n - 1) exn
+  in
+  loop 5 exn
+
+let eval cfg file =
   let ppf = Format.formatter_of_out_channel stderr in
   errors := false;
   let eval phrase =
@@ -303,25 +321,44 @@ let eval cfg cmd =
     in
     Oprint.out_phrase := fn_out_phrase;
     let restore () = Oprint.out_phrase := out_phrase in
-    begin
+    let result =
       match eval cfg ppf phrase with
       | ok ->
           errors := (not ok) || !errors;
-          restore ()
+          restore ();
+          Ok ()
       | exception exn ->
+          Log.err (fun m ->
+              m "Got an exception while evaluation: %s" (Printexc.to_string exn));
           errors := true;
           restore ();
-          Location.report_exception ppf exn
-    end;
-    Format.pp_print_flush ppf ()
+          Error (retrieve_report exn)
+    in
+    Format.pp_print_flush ppf ();
+    result
   in
   capture_compiler_stuff ppf @@ fun () ->
-  let cmd =
-    match cmd with [] | [ _ ] -> cmd | x :: r -> x :: List.map (( ^ ) " ") r
+  let file =
+    match file with [] | [ _ ] -> file | x :: r -> x :: List.map (( ^ ) " ") r
   in
-  let phrases = cut_into_phrases cmd in
-  List.iter
-    (fun phrase ->
-      match Phrase.parse phrase with Some t -> eval t | None -> ())
-    phrases;
-  if !errors then Error () else Ok ()
+  let phrases = cut_into_phrases file in
+  let fn acc phrase =
+    match acc with
+    | Error _ as err -> err
+    | Ok () -> (
+        Log.debug (fun m ->
+            m "Parse phrase: %a" Fmt.(Dump.list (fmt "%S")) phrase);
+        match Phrase.parse phrase with
+        | Some t ->
+            Log.debug (fun m ->
+                m "Eval phrase: %a" Fmt.(Dump.list (fmt "%S")) phrase);
+            begin
+              match eval t with
+              | Ok () -> Ok ()
+              | Error reports -> Error (`Reports reports)
+            end
+        | None -> Error `Syntax)
+  in
+  match List.fold_left fn (Ok ()) phrases with
+  | Ok _ as value -> value
+  | Error _ -> Error ()
