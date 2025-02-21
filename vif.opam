@@ -21,6 +21,7 @@ depends: [
   "json-data-encoding"
   "decompress"
   "conan-unix"
+  "conan-database"
   "multipart_form-miou"
   "hmap"
 ]
@@ -37,4 +38,7 @@ pin-depends: [
   [ "miou.dev" "git+https://github.com/robur-coop/miou.git#1f0bf804c61338b8d0bc7cf15dd1e65f9d5699b3" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#d9d75404a0395cceda43b72f601bf781caf58047" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#d9d75404a0395cceda43b72f601bf781caf58047" ]
+  [ "conan.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
+  [ "conan-unix.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
+  [ "conan-database.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
 ]
