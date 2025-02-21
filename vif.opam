@@ -17,6 +17,11 @@ depends: [
   "httpcats"
   "tyre"
   "mirage-crypto-rng-miou-unix"
+  "jsonm"
+  "json-data-encoding"
+  "decompress"
+  "conan-unix"
+  "multipart_form-miou"
   "hmap"
 ]
 conflicts: [ "result" {< "1.5"} ]
@@ -28,5 +33,8 @@ build: [
 synopsis: ""
 
 pin-depends: [
-  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#84a8a419057c1594f50f57ca8969477205fc3871" ]
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#303e9e5508a0aab6c52920183c114b23e79ab704" ]
+  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#1f0bf804c61338b8d0bc7cf15dd1e65f9d5699b3" ]
+  [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#d9d75404a0395cceda43b72f601bf781caf58047" ]
+  [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#d9d75404a0395cceda43b72f601bf781caf58047" ]
 ]
