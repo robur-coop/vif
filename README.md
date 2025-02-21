@@ -9,7 +9,7 @@ However, we do not recommend using this project in production.
 Vif is a small program that runs an OCaml script and launches a Web server from
 it. The main idea is to be able to set up a typed Web server as quickly as
 possible (note that we use [hurl][hurl], an HTTP client in OCaml)
-```shell
+```ocaml
 $ opam pin add -y https://github.com/robur-coop/vif
 $ opam pin add -y https://github.com/robur-coop/hurl
 $ opam install vif hurl
@@ -51,7 +51,7 @@ $ kill -SIGINT $(cat vid.pid)
 
 ### Examples
 
-The [examples][./examples] folder contains several examples of the use of `vif`.
+The [examples](./examples) folder contains several examples of the use of `vif`.
 It shows the management of more complex requests (json, multipart-form, etc.) as
 well as the use of an SQL database with [caqti][caqti].
 
