@@ -91,6 +91,21 @@ let with_string ?compression:alg req str =
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   String str
 
+let with_tyxml ?compression:alg req tyxml =
+  let none = return false in
+  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+  let field = "transfer-encoding" in
+  let v = "chunked" in
+  let* _ = add_unless_exists ~field v in
+  let field = "content-type" in
+  let v = "text/html; charset=utf-8" in
+  let* _ = add_unless_exists ~field v in
+  let src =
+    Stream.Source.ppf @@ fun ppf -> Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
+  in
+  let stream = Stream.Stream.from src in
+  Stream stream
+
 let response ?headers:(hdrs = []) status req0 =
   match Vif_request0.reqd req0 with
   | `V1 reqd ->

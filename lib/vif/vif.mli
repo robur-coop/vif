@@ -300,6 +300,12 @@ module Response : sig
     -> Fpath.t
     -> (e, s, unit) t
 
+  val with_tyxml :
+       ?compression:[< `DEFLATE ]
+    -> ('c, 'a) Request.t
+    -> Tyxml.Html.doc
+    -> (e, f, unit) t
+
   val respond : Status.t -> (f, s, unit) t
 
   (** Headers manipulation. *)

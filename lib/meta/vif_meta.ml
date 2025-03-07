@@ -399,30 +399,6 @@ let dfs (graph : graph) visited start_node =
 let sort graph =
   List.fold_left (fun visited node -> dfs graph visited node) [] graph
 
-(*
-let sort libs =
-  let rec go acc later todo progress =
-    match (todo, later) with
-    | [], [] -> List.rev acc
-    | [], _ ->
-        if progress then go acc [] later false else raise Cycle
-    | ((_, path, descr) as x) :: r, _ ->
-        let deps = dependencies_of (path, descr) in
-        let deps_already_added =
-          let fn dep = List.exists (equal_dep dep) acc in
-          List.for_all fn deps
-        in
-        if deps_already_added then go (x :: acc) later r true
-        else go acc (x :: later) r progress
-  in
-  let starts, todo =
-    List.partition
-      (fun (_, path, descr) -> dependencies_of (path, descr) = [])
-      libs
-  in
-  go starts [] todo false
-*)
-
 let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
   let rec go acc visited = function
     | [] -> Ok acc

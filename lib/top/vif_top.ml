@@ -134,12 +134,17 @@ let load cfg str =
   let* deps =
     Vif_meta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path
   in
-  let fn acc (_, path, descr) =
+  let fn acc (_pkg, path, descr) =
     let path =
       match List.assoc_opt "directory" descr with
       | Some (dir :: _) -> to_dir_path (path / dir)
       | Some [] | None -> path
     in
+    begin match List.assoc_opt "ppx" descr with
+      | None | Some [] -> ()
+      | Some (ppx :: _) ->
+          let ppx = (path / ppx) in
+          Clflags.all_ppx := ppx :: !Clflags.all_ppx end;
     match List.assoc_opt "plugin" descr with
     | Some (plugin :: _) -> (path / plugin) :: acc
     | Some [] | None -> acc

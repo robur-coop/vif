@@ -18,6 +18,7 @@ type 'a source =
 module Source : sig
   val file : ?offset:int -> string -> string source
   val dispose : 'a source -> unit
+  val ppf : (Format.formatter -> unit) -> string source
 end
 
 type ('a, 'r) sink =

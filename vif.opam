@@ -24,6 +24,7 @@ depends: [
   "conan-database"
   "multipart_form-miou"
   "hmap"
+  "tyxml"
 ]
 conflicts: [ "result" {< "1.5"} ]
 build: [
