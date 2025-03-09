@@ -6,12 +6,12 @@ end
 
 module Hmap = Hmap.Make (Key)
 
-type ('cfg, 'v) fn = Vif_request0.t -> string -> Vif_s.t -> 'cfg -> 'v option
+type ('cfg, 'v) fn = Vif_request0.t -> string -> Vif_g.t -> 'cfg -> 'v option
 type ('cfg, 'v) t = Middleware : ('cfg, 'v) fn * 'v Hmap.key -> ('cfg, 'v) t
 type 'cfg m = [] : 'cfg m | ( :: ) : ('cfg, 'a) t * 'cfg m -> 'cfg m
 
 type ('value, 'a, 'c) ctx = {
-    server: Vif_s.t
+    server: Vif_g.t
   ; req0: Vif_request0.t
   ; target: string
   ; user's_value: 'value

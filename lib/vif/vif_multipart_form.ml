@@ -32,7 +32,7 @@ and ('a, 'b) fields =
 
 and 'a field = { fname: string; ftype: 'a atom }
 and 'a atom = Primary : 'a primary -> 'a atom | Record : 'a t -> 'a atom
-and 'a primary = String : string primary
+and 'a primary = String : string primary | Int : int primary
 
 type meta = {
     name: string option
@@ -48,6 +48,7 @@ let pp_meta ppf t =
   | _ -> Fmt.pf ppf "<unknown-part>"
 
 type raw = ((meta * Vif_headers.t) * string) list
+type stream = (meta * string Vif_s.source) Vif_s.stream
 
 module Fields_folder (Acc : sig
   type ('a, 'b) t
@@ -81,6 +82,7 @@ let find_by_name name raw =
 
 let rec get_value : type a. a atom -> string -> raw -> a = function
   | Primary String -> find_by_name
+  | Primary Int -> fun name raw -> int_of_string (find_by_name name raw)
   | Record r -> fun _ raw -> get_record r raw
 
 and get_record : type a. a t -> raw -> a =
@@ -141,3 +143,4 @@ let sealr : type a b. (a, b, a) orecord -> a t =
 
 let ( |+ ) = app
 let string = Primary String
+let int = Primary Int

@@ -1,7 +1,7 @@
 type ('c, 'value) t =
      ('c, string) Vif_request.t
   -> string
-  -> Vif_s.t
+  -> Vif_g.t
   -> 'value
   -> (Vif_response.e, Vif_response.s, unit) Vif_response.t option
 
@@ -67,8 +67,7 @@ let static ?(top = pwd) req target _server _ =
           let* () = Vif_response.with_string req "" in
           Vif_response.respond `Not_modified
         else
-          let src = Stream.Source.file (Fpath.to_string abs_path) in
-          let src = Stream.Stream.from src in
+          let src = Vif_s.Source.file (Fpath.to_string abs_path) in
           let field = "content-type" in
           let* () = Vif_response.add ~field (mime_type abs_path) in
           let stat = Unix.stat (Fpath.to_string abs_path) in
@@ -76,7 +75,7 @@ let static ?(top = pwd) req target _server _ =
           let* () = Vif_response.add ~field (string_of_int stat.Unix.st_size) in
           let field = "etag" in
           let* () = Vif_response.add ~field (sha256sum abs_path) in
-          let* () = Vif_response.with_stream req src in
+          let* () = Vif_response.with_source req src in
           Vif_response.respond `OK
       in
       Some process

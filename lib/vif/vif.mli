@@ -29,7 +29,7 @@ module U : sig
 end
 
 module Json = Json
-module Stream = Stream
+module S = Vif_s
 
 module Headers : sig
   type t = (string * string) list
@@ -56,6 +56,7 @@ module Multipart_form : sig
   type 'a atom
 
   val string : string atom
+  val int : int atom
 
   type ('a, 'b, 'c) orecord
 
@@ -66,6 +67,15 @@ module Multipart_form : sig
   val field : string -> 'a atom -> 'a field
   val ( |+ ) : ('a, 'b, 'c -> 'd) orecord -> 'c field -> ('a, 'b, 'd) orecord
   val sealr : ('a, 'b, 'a) orecord -> 'a t
+
+  type part
+
+  val name : part -> string option
+  val filename : part -> string option
+  val mime : part -> string option
+  val size : part -> int option
+
+  type stream = (part * string S.source) S.stream
 end
 
 module T : sig
@@ -78,6 +88,7 @@ module T : sig
   val json : (json, Json.t) t
   val json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
   val m : 'a Multipart_form.t -> (multipart_form, 'a) t
+  val multipart_form : (multipart_form, Multipart_form.stream) t
   val any : ('c, string) t
 end
 
@@ -98,7 +109,7 @@ module Request : sig
        (T.multipart_form, 'a) t
     -> ('a, [ `Not_found of string | `Invalid_multipart_form ]) result
 
-  val stream : ('c, 'a) t -> string Stream.stream
+  val source : ('c, 'a) t -> string S.source
   val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
 
   type request
@@ -204,7 +215,7 @@ module Ds : sig
     | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
 end
 
-module S : sig
+module G : sig
   type t
 
   val device : ('value, 'a) D.device -> t -> 'a
@@ -212,7 +223,7 @@ end
 
 module Ms : sig
   type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) M.t * 'cfg t -> 'cfg t
-  type ('cfg, 'v) fn = Request.request -> string -> S.t -> 'cfg -> 'v option
+  type ('cfg, 'v) fn = Request.request -> string -> G.t -> 'cfg -> 'v option
 
   val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) M.t
 end
@@ -284,24 +295,27 @@ module Response : sig
   type f
   type s
 
-  val with_stream :
-       ?compression:[< `DEFLATE ]
+  val with_source :
+       ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
-    -> string Stream.stream
+    -> string S.source
     -> (e, f, unit) t
 
   val with_string :
-    ?compression:[< `DEFLATE ] -> ('c, 'a) Request.t -> string -> (e, f, unit) t
+       ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> string
+    -> (e, f, unit) t
 
   val with_file :
        ?mime:string
-    -> ?compression:[< `DEFLATE ]
+    -> ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
     -> Fpath.t
     -> (e, s, unit) t
 
   val with_tyxml :
-       ?compression:[< `DEFLATE ]
+       ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
     -> Tyxml.Html.doc
     -> (e, f, unit) t
@@ -335,7 +349,7 @@ module Cookie : sig
   val get :
        ?encrypted:bool
     -> name:string
-    -> S.t
+    -> G.t
     -> Request.request
     -> (string, [> error ]) result
 
@@ -346,7 +360,7 @@ module Cookie : sig
     -> ?cfg:config
     -> ?path:string
     -> name:string
-    -> S.t
+    -> G.t
     -> ('c, 'a) Request.t
     -> string
     -> ('p, 'p, unit) Response.t
@@ -356,7 +370,7 @@ module Handler : sig
   type ('c, 'value) t =
        ('c, string) Request.t
     -> string
-    -> S.t
+    -> G.t
     -> 'value
     -> (Response.e, Response.s, unit) Response.t option
 
@@ -393,7 +407,7 @@ val run :
   -> ?devices:'value Ds.t
   -> ?middlewares:'value Ms.t
   -> ?handlers:('c, 'value) Handler.t list
-  -> (S.t -> 'value -> (e, s, unit) Response.t) R.route list
+  -> (G.t -> 'value -> (e, s, unit) Response.t) R.route list
   -> 'value
   -> unit
 

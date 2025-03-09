@@ -48,7 +48,7 @@ let deserialize req _server () =
 let routes =
   let open Vif.U in
   let open Vif.R in
-  let open Vif.Content_type in
+  let open Vif.T in
   [ post (json_encoding foo) (rel /?? nil) --> deserialize ]
 ;;
 

@@ -8,11 +8,11 @@ and s = Sent
 
 type 'a state =
   | Empty : e state
-  | Filled : string Stream.stream -> f state
+  | Filled : string Vif_s.source -> f state
   | Sent : s state
 
 let empty = Empty
-let filled stream = Filled stream
+let filled from = Filled from
 let sent = Sent
 
 type ('p, 'q, 'a) t =
@@ -22,7 +22,7 @@ type ('p, 'q, 'a) t =
   | Rem_header : string -> ('p, 'p, unit) t
   | Return : 'a -> ('p, 'p, 'a) t
   | Bind : ('p, 'q, 'a) t * ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
-  | Stream : string Stream.stream -> (e, f, unit) t
+  | Source : string Vif_s.source -> (e, f, unit) t
   | String : string -> (e, f, unit) t
   | Respond : Vif_status.t -> (f, s, unit) t
 
@@ -37,11 +37,6 @@ let ( let* ) = bind
 let strf fmt = Format.asprintf fmt
 
 module Hdrs = Vif_headers
-
-let compress_string ~headers str =
-  match Vif_headers.get headers "content-encoding" with
-  | Some "gzip" -> assert false
-  | _ -> str
 
 let can_compress alg req =
   match Vif_request.reqd req with
@@ -74,19 +69,24 @@ let compression alg req =
       let* () = set ~field:"content-encoding" "deflate" in
       let* () = rem ~field:"content-length" in
       return true
-  | `DEFLATE -> return false
+  | `Gzip when can_compress "gzip" req ->
+      let* () = set ~field:"content-encoding" "gzip" in
+      let* () = rem ~field:"content-length" in
+      return true
+  | _ -> return false
 
-let with_stream ?compression:alg req stream =
+let with_source ?compression:alg req source =
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   let field = "transfer-encoding" in
   let v = "chunked" in
   let* _ = add_unless_exists ~field v in
-  Stream stream
+  Source source
 
 let with_string ?compression:alg req str =
   let field = "content-length" in
   let* () = add ~field (string_of_int (String.length str)) in
+  let* _ = add_unless_exists ~field:"connection" "close" in
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   String str
@@ -100,11 +100,12 @@ let with_tyxml ?compression:alg req tyxml =
   let field = "content-type" in
   let v = "text/html; charset=utf-8" in
   let* _ = add_unless_exists ~field v in
-  let src =
-    Stream.Source.ppf @@ fun ppf -> Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
+  let* _ = add_unless_exists ~field:"connection" "close" in
+  let source =
+    Vif_s.Source.with_formatter @@ fun ppf ->
+    Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
   in
-  let stream = Stream.Stream.from src in
-  Stream stream
+  Source source
 
 let response ?headers:(hdrs = []) status req0 =
   match Vif_request0.reqd req0 with
@@ -117,13 +118,22 @@ let response ?headers:(hdrs = []) status req0 =
       in
       let resp = H1.Response.create ~headers:hdrs status in
       let init () = H1.Reqd.respond_with_streaming reqd resp in
+      let fn body = function
+        | `Written -> Miou.yield ()
+        | `Closed -> H1.Body.Writer.close body
+      in
       let push body str =
+        Log.debug (fun m -> m "<- %d byte(s)" (String.length str));
         H1.Body.Writer.write_string body str;
+        H1.Body.Writer.flush_with_reason body (fn body);
         body
       in
-      let full _ = false in
-      let stop = H1.Body.Writer.close in
-      (Sink { init; push; full; stop } : (string, unit) Stream.sink)
+      let full = H1.Body.Writer.is_closed in
+      let stop body =
+        Log.debug (fun m -> m "<- close the response body");
+        H1.Body.Writer.close body
+      in
+      (Sink { init; push; full; stop } : (string, unit) Vif_s.sink)
   | `V2 reqd ->
       let hdrs = H2.Headers.of_list hdrs in
       let resp = H2.Response.create ~headers:hdrs status in
@@ -134,7 +144,7 @@ let response ?headers:(hdrs = []) status req0 =
       in
       let full _ = false in
       let stop = H2.Body.Writer.close in
-      (Sink { init; push; full; stop } : (string, unit) Stream.sink)
+      (Sink { init; push; full; stop } : (string, unit) Vif_s.sink)
 
 let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
  fun req s t ->
@@ -162,27 +172,35 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
     | state, Set_header (k, v) ->
         headers := (k, v) :: Vif_headers.rem !headers k;
         (state, ())
-    | Empty, Stream stream -> (Filled stream, ())
+    | Empty, Source from -> (Filled from, ())
     | Empty, String str ->
         if Vif_request0.version req = 1 then
           headers := Vif_headers.add_unless_exists !headers "connection" "close";
-        (Filled (Stream.Stream.singleton str), ())
-    | Filled stream, Respond status ->
+        (Filled (Vif_s.Source.list [ str ]), ())
+    | Filled from, Respond status ->
         let headers = !headers in
-        let headers, stream =
+        let headers, via =
           match Vif_headers.get headers "content-encoding" with
           | Some "deflate" ->
-              let flow = Stream.Flow.deflate () in
-              let stream = Stream.Stream.via flow stream in
               let headers = Vif_headers.rem headers "content-length" in
               let headers =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, stream)
-          | _ -> (headers, stream)
+              (headers, Vif_s.Flow.deflate ())
+          | Some "gzip" ->
+              let headers = Vif_headers.rem headers "content-length" in
+              let headers =
+                Vif_headers.add_unless_exists headers "transfer-encoding"
+                  "chunked"
+              in
+              (headers, Vif_s.Flow.gzip ())
+          | _ -> (headers, Vif_s.Flow.identity)
         in
-        let sink = response ~headers status req in
-        (Sent, Stream.Stream.into sink stream)
+        let into = response ~headers status req in
+        Log.debug (fun m -> m "run our stream to send a response");
+        let (), src = Vif_s.Stream.run ~from ~via ~into in
+        Option.iter Vif_s.Source.dispose src;
+        (Sent, ())
   in
   go s t

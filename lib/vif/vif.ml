@@ -19,7 +19,7 @@ end
 
 module C = Vif_c
 module D = Vif_d
-module S = Vif_s
+module G = Vif_g
 module M = Vif_m
 
 module Ds = struct
@@ -52,7 +52,7 @@ module Ms = struct
   let make = Vif_m.make
 
   type ('value, 'a, 'c) ctx = {
-      server: Vif_s.t
+      server: Vif_g.t
     ; request: Vif_request0.t
     ; target: string
     ; user's_value: 'value
@@ -71,7 +71,7 @@ module Ms = struct
 end
 
 module T = Vif_t
-module Stream = Stream
+module S = Vif_s
 module Method = Vif_method
 module Status = Vif_status
 module Headers = Vif_headers
@@ -96,8 +96,7 @@ module Response = struct
       respond `Not_modified
     else
       let mime = Option.value ~default:(mime_type path) mime in
-      let src = Stream.Source.file (Fpath.to_string path) in
-      let src = Stream.Stream.from src in
+      let src = Vif_s.Source.file (Fpath.to_string path) in
       let field = "connection" in
       let* () =
         if Vif_request.version req = 1 then add ~field "close" else return ()
@@ -111,7 +110,7 @@ module Response = struct
       let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
       let field = "etag" in
       let* () = add ~field (Vif_handler.sha256sum path) in
-      let* () = with_stream req src in
+      let* () = with_source req src in
       respond `OK
 end
 
@@ -176,68 +175,176 @@ let recognize_request ~env req0 =
         if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Multipart_form -> assert false (* TODO *)
+    | Multipart_form as encoding ->
+        let c = content_type req0 in
+        let type_match = Result.map is_multipart_form_data c in
+        let type_match = Result.value ~default:false type_match in
+        if type_match && meth_match then
+          Some (Vif_request.of_req0 ~encoding ~env req0)
+        else None
   in
   { Vif_r.extract }
 
 module Multipart_form = struct
-  include Vif_multipart_form
+  open Vif_s
 
-  let parse req =
-    let open Multipart_form_miou in
+  type 'id multipart_form_context = { queue: event Queue.t; parse: int parse }
+  and event = [ `Id of Multipart_form.Header.t * string Bqueue.t ]
+
+  and 'id parse =
+       [ `Eof | `String of string ]
+    -> [ `Continue
+       | `Done of string Bqueue.t Multipart_form.t
+       | `Fail of string ]
+
+  let rec until_await ({ queue; parse } as ctx) push acc str =
+    Logs.debug (fun m -> m "until_await");
+    match Queue.pop queue with
+    | `Id (header, bqueue) ->
+        let src = Source.of_bqueue bqueue in
+        let acc = push acc (header, src) in
+        until_await ctx push acc str
+    | exception Queue.Empty -> begin
+        match parse (`String str) with
+        | `Continue -> `Continue (ctx, acc)
+        | `Done _tree -> `Stop acc
+        | `Fail _ -> Fmt.failwith "Invalid multipart-form/data"
+      end
+
+  let rec until_done ({ queue; parse } as ctx) push acc =
+    Logs.debug (fun m -> m "until_done");
+    match Queue.pop queue with
+    | `Id (header, bqueue) ->
+        let src = Source.of_bqueue bqueue in
+        let acc = push acc (header, src) in
+        until_done ctx push acc
+    | exception Queue.Empty -> begin
+        match parse `Eof with
+        | `Continue -> until_done ctx push acc
+        | `Done _tree -> acc
+        | `Fail _ -> Fmt.failwith "Invalid multipart-form/data"
+      end
+
+  let multipart_form req :
+      (string, Multipart_form.Header.t * string source) flow =
     let hdrs = Vif_request.headers req in
-    let ct =
+    let content_type =
       match Vif_headers.get hdrs "content-type" with
       | None -> Fmt.invalid_arg "Content-type field missing"
       | Some str ->
-          let ct = Multipart_form.Content_type.of_string (str ^ "\r\n") in
-          Result.get_ok ct
+          Multipart_form.Content_type.of_string (str ^ "\r\n") |> Result.get_ok
     in
-    let t = Bounded_stream.create 0x100 in
-    let prm0 =
-      Miou.async @@ fun () ->
-      let open Stream in
-      Stream.into (Sink.into_bstream t) (Vif_request.stream req)
-    in
-    let prm1 = Miou.async @@ fun () -> of_stream_to_list t ct in
-    Miou.await_exn prm0;
-    match Miou.await_exn prm1 with
-    | Ok (_tree, lst) ->
-        let fn (_id, hdrs) =
-          let hdrs = Multipart_form.Header.to_list hdrs in
-          let name = ref None in
-          let filename = ref None in
-          let size = ref None in
-          let mime = ref None in
-          let fn = function
-            | Multipart_form.Field.Field (_, Content_type, { ty; subty; _ }) ->
-                let open Multipart_form.Content_type in
-                let value = Fmt.str "%a/%a" Type.pp ty Subtype.pp subty in
-                mime := Some value;
-                None
-            | Field (_, Content_encoding, _) -> None
-            | Field (_, Content_disposition, t) ->
-                let open Multipart_form in
-                name := Content_disposition.name t;
-                filename := Content_disposition.filename t;
-                size := Content_disposition.size t;
-                None
-            | Field (fn, Field, unstrctrd) ->
-                let k = (fn :> string) in
-                let v = Unstrctrd.fold_fws unstrctrd in
-                let v = Unstrctrd.to_utf_8_string v in
-                Some (k, v)
-          in
-          let hdrs = List.filter_map fn hdrs in
-          let meta =
-            { name= !name; filename= !filename; size= !size; mime= !mime }
-          in
-          (meta, hdrs)
+    let flow (Sink k) =
+      let queue = Queue.create () in
+      let emitters header =
+        let bqueue = Bqueue.create 0x100 in
+        Queue.push (`Id (header, bqueue)) queue;
+        let emitter = function
+          | None -> Bqueue.close bqueue
+          | Some str -> Bqueue.put bqueue str
         in
-        Ok (List.map (fun (k, v) -> (fn k, v)) lst)
-    | Error (`Msg msg) ->
-        Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
-        Error `Invalid_multipart_form
+        (emitter, bqueue)
+      in
+      let init () =
+        let parse = Multipart_form.parse ~emitters content_type in
+        let acc = k.init () in
+        `Continue ({ queue; parse }, acc)
+      in
+      let push state str =
+        match state with
+        | `Continue (ctx, acc) -> until_await ctx k.push acc str
+        | `Stop _ as state -> state
+      in
+      let full = function `Continue _ -> false | `Stop _ -> true in
+      let stop = function
+        | `Continue (ctx, acc) -> k.stop (until_done ctx k.push acc)
+        | `Stop acc -> k.stop acc
+      in
+      Sink { init; stop; full; push }
+    in
+    { flow }
+
+  let flat_parts : ('a * string source, 'a * string) flow =
+    let flow (Sink k) =
+      let init () = k.init () in
+      let push acc (hdrs, from) =
+        let str, src = Stream.run ~from ~via:Flow.identity ~into:Sink.string in
+        Option.iter Source.dispose src;
+        k.push acc (hdrs, str)
+      in
+      let full acc = k.full acc in
+      let stop acc = k.stop acc in
+      Sink { init; stop; full; push }
+    in
+    { flow }
+
+  include Vif_multipart_form
+
+  type part = meta = {
+      name: string option
+    ; filename: string option
+    ; size: int option
+    ; mime: string option
+  }
+
+  let mime { mime; _ } = mime
+  let filename { filename; _ } = filename
+  let name { name; _ } = name
+  let size { size; _ } = size
+
+  let aggregate hdrs =
+    let hdrs = Multipart_form.Header.to_list hdrs in
+    let name = ref None in
+    let filename = ref None in
+    let size = ref None in
+    let mime = ref None in
+    let fn = function
+      | Multipart_form.Field.Field (_, Content_type, { ty; subty; _ }) ->
+          let open Multipart_form.Content_type in
+          let value = Fmt.str "%a/%a" Type.pp ty Subtype.pp subty in
+          mime := Some value;
+          None
+      | Field (_, Content_encoding, _) -> None
+      | Field (_, Content_disposition, t) ->
+          let open Multipart_form in
+          name := Content_disposition.name t;
+          filename := Content_disposition.filename t;
+          size := Content_disposition.size t;
+          None
+      | Field (fn, Field, unstrctrd) ->
+          let k = (fn :> string) in
+          let v = Unstrctrd.fold_fws unstrctrd in
+          let v = Unstrctrd.to_utf_8_string v in
+          Some (k, v)
+    in
+    let hdrs = List.filter_map fn hdrs in
+    let meta = { name= !name; filename= !filename; size= !size; mime= !mime } in
+    (hdrs, meta)
+
+  let parse req =
+    let from = Vif_request.source req in
+    try
+      let lst, src =
+        Stream.run ~from
+          ~via:Flow.(multipart_form req << flat_parts)
+          ~into:Sink.list
+      in
+      Option.iter Source.dispose src;
+      let fn (hdrs, str) =
+        let hdrs, meta = aggregate hdrs in
+        ((meta, hdrs), str)
+      in
+      Ok (List.map fn lst)
+    with _exn -> Error `Invalid_multipart_form
+
+  let stream req =
+    let fn (hdrs, src) =
+      let _hdrs, meta = aggregate hdrs in
+      (meta, src)
+    in
+    Stream.from (Vif_request.source req)
+    |> Stream.via (multipart_form req)
+    |> Stream.map fn
 end
 
 module Request = struct
@@ -251,11 +358,15 @@ module Request = struct
         let ( let* ) = Result.bind in
         let* raw = Multipart_form.parse req in
         begin
-          try Ok (Multipart_form.get_record r raw)
-          with Multipart_form.Field_not_found field ->
-            Error (`Not_found field)
+          try Ok (Multipart_form.get_record r raw) with
+          | Multipart_form.Field_not_found field -> Error (`Not_found field)
+          | exn ->
+              Logs.err (fun m ->
+                  m "Unexpected exception from multipart-form/data: %s"
+                    (Printexc.to_string exn));
+              Error `Invalid_multipart_form
         end
-    | { encoding= Multipart_form; _ } -> assert false
+    | { encoding= Multipart_form; _ } as req -> Ok (Multipart_form.stream req)
     | { encoding= Any; _ } -> assert false
 end
 
@@ -265,13 +376,13 @@ type 'value daemon = {
   ; orphans: unit Miou.orphans
   ; condition: Miou.Condition.t
   ; user's_value: 'value
-  ; server: Vif_s.t
+  ; server: Vif_g.t
 }
 
 and 'value user's_function =
   | User's_task : Vif_request0.t * 'value fn -> 'value user's_function
 
-and 'value fn = Vif_s.t -> 'value -> (e, s, unit) Vif_response.t
+and 'value fn = Vif_g.t -> 'value -> (e, s, unit) Vif_response.t
 
 let to_ctx daemon req0 =
   {
@@ -442,7 +553,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let devices = Ds.run Vif_d.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
-  let server = { Vif_s.devices; cookie_key= cfg.Vif_config.cookie_key } in
+  let server = { Vif_g.devices; cookie_key= cfg.Vif_config.cookie_key } in
   let default = default_from_handlers handlers in
   let fn0 = handler cfg ~default ~middlewares routes in
   let prm0 = Miou.async @@ fun () -> process stop cfg server user's_value fn0 in

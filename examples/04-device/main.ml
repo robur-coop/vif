@@ -10,7 +10,7 @@ let foo =
 open Vif ;;
 
 let default req server () =
-  let Foo = Vif.S.device foo server in
+  let Foo = Vif.G.device foo server in
   let* () = Response.with_string req "ok\n" in
   Response.respond `OK
 ;;

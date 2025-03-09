@@ -22,7 +22,7 @@ open Vif ;;
 open Caqti_request.Infix ;;
 
 let add req n server _cfg =
-  let (module Conn) = Vif.S.device caqti server in
+  let (module Conn) = Vif.G.device caqti server in
   let sql = Caqti_type.(int ->. unit) ("INSERT INTO t (f) VALUES (?)") in
   match Conn.exec sql n with
   | Ok () ->
@@ -38,7 +38,7 @@ let add req n server _cfg =
 ;;
 
 let list req server _cfg =
-  let (module Conn) = Vif.S.device caqti server in
+  let (module Conn) = Vif.G.device caqti server in
   let sql = Caqti_type.(unit ->* int) ("SELECT f FROM t") in
   match Conn.collect_list sql () with
   | Ok lst ->

@@ -12,7 +12,9 @@ let%html form = {html|
       <label for="username">Username:</label>
       <input type="text" name="username" id="username" required />
       <label for="password">Password:</label>
-      <input type="text" name="password" id="password" required />
+      <input type="password" name="password" id="password" required />
+      <label for="age">Age:</label>
+      <input type="number" name="age" id="age" value="18" />
       <input type="submit" value="Enter!" />
     </form>
   </body>
@@ -28,21 +30,24 @@ let%html apply username = {html|
 </html>
 |html} ;;
 
-let apply username : Tyxml_html.doc =
-  apply [ Html.txt username ]
+let apply username age : Tyxml_html.doc =
+  let str = Fmt.str "%s (%d years)" username age in
+  apply [ Html.txt str ]
 ;;
 
 open Vif ;;
 
 type credential =
   { username : string
-  ; password : string }
+  ; password : string
+  ; age : int }
 ;;
 
 let login req server cfg =
   match Vif.Request.of_multipart_form req with
-  | Ok { username; password } ->
-    let* () = Response.with_tyxml req (apply username) in
+  | Ok { username; password; age } ->
+    Logs.debug (fun m -> m "new user %S" username);
+    let* () = Response.with_tyxml req (apply username age) in
     Response.respond `OK
   | _ ->
     let field = "content-type" in
@@ -58,11 +63,12 @@ let default req _server () =
 
 let form =
   let open Vif.Multipart_form in
-  let fn username password =
-    { username; password } in
+  let fn username password age =
+    { username; password; age } in
   record fn
   |+ field "username" string
   |+ field "password" string
+  |+ field "age" int
   |> sealr
 ;;
 

@@ -1,10 +1,14 @@
+let src = Logs.Src.create "vif.request0"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 type t = {
     request: request
   ; tls: Tls.Core.epoch_data option
   ; reqd: reqd
   ; socket: socket
   ; on_localhost: bool
-  ; stream: string Stream.stream
+  ; source: string Vif_s.source
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
 }
 
@@ -12,28 +16,30 @@ and reqd = Httpcats.Server.reqd
 and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ]
 and request = V1 of H1.Request.t | V2 of H2.Request.t
 
-let to_bqueue ~schedule ~close body =
-  let stream = Stream.Bqueue.create 0x100 in
-  let rec on_eof () = close body; Stream.Bqueue.close stream
+let to_source ~schedule ~close body =
+  Vif_s.Source.with_task ~limit:0x100 @@ fun bqueue ->
+  let rec on_eof () =
+    Log.debug (fun m -> m "-> request body closed");
+    close body;
+    Vif_s.Bqueue.close bqueue
   and on_read bstr ~off ~len =
     let str = Bigstringaf.substring bstr ~off ~len in
-    Stream.Bqueue.put stream str;
+    Log.debug (fun m -> m "-> + %d byte(s)" (String.length str));
+    Vif_s.Bqueue.put bqueue str;
     schedule body ~on_eof ~on_read
   in
-  schedule body ~on_eof ~on_read;
-  stream
+  Log.debug (fun m -> m "schedule a reader");
+  schedule body ~on_eof ~on_read
 
-let to_stream = function
+let to_source = function
   | `V1 reqd ->
       let body = H1.Reqd.request_body reqd in
-      to_bqueue ~schedule:H1.Body.Reader.schedule_read
+      to_source ~schedule:H1.Body.Reader.schedule_read
         ~close:H1.Body.Reader.close body
-      |> Stream.Stream.of_bqueue
   | `V2 reqd ->
       let body = H2.Reqd.request_body reqd in
-      to_bqueue ~schedule:H2.Body.Reader.schedule_read
+      to_source ~schedule:H2.Body.Reader.schedule_read
         ~close:H2.Body.Reader.close body
-      |> Stream.Stream.of_bqueue
 
 let of_reqd socket reqd =
   let request, body =
@@ -58,8 +64,8 @@ let of_reqd socket reqd =
         inet_addr = Unix.inet_addr_loopback
         || inet_addr = Unix.inet6_addr_loopback
   in
-  let stream = to_stream reqd in
-  { request; tls; reqd; socket; on_localhost; stream; body }
+  let source = to_source reqd in
+  { request; tls; reqd; socket; on_localhost; source; body }
 
 let headers { request; _ } =
   match request with
@@ -90,7 +96,7 @@ let version { request; _ } = match request with V1 _ -> 1 | V2 _ -> 2
 let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost
 let reqd { reqd; _ } = reqd
-let stream { stream; _ } = stream
+let source { source; _ } = source
 
 let close { body; _ } =
   match body with

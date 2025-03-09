@@ -20,11 +20,11 @@ let meth { request; _ } = Vif_request0.meth request
 let version { request; _ } = Vif_request0.version request
 let headers { request; _ } = Vif_request0.headers request
 let reqd { request; _ } = Vif_request0.reqd request
-let stream { request; _ } = Vif_request0.stream request
+let source { request; _ } = Vif_request0.source request
 
 let to_string { request; _ } =
-  let stream = Vif_request0.stream request in
-  Stream.Stream.into Stream.Sink.string stream
+  let src = Vif_request0.source request in
+  Vif_s.Stream.from src |> Vif_s.Stream.into Vif_s.Sink.string
 
 let destruct : type a. a Json_encoding.encoding -> Json.t -> a =
   Json_encoding.destruct
@@ -35,11 +35,12 @@ let of_json : type a. (Vif_t.json, a) t -> (a, [> `Msg of string ]) result =
   function
   | { encoding= Any; _ } as req -> Ok (to_string req)
   | { encoding= Json; _ } as req ->
-      let stream = stream req in
-      Stream.Stream.into (Stream.Sink.json ()) stream
+      let src = source req in
+      Vif_s.Stream.from src |> Vif_s.(Stream.into (Sink.json ()))
   | { encoding= Json_encoding encoding; _ } as req -> begin
-      let stream = stream req in
-      match Stream.Stream.into (Stream.Sink.json ()) stream with
+      let src = source req in
+      let res = Vif_s.Stream.from src |> Vif_s.(Stream.into (Sink.json ())) in
+      match res with
       | Error (`Msg _) as err -> err
       | Ok (json : Json.t) -> begin
           try Ok (destruct encoding json)
