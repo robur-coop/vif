@@ -257,10 +257,39 @@ module Sink = struct
     Sink { init; push; full; stop }
 
   let each fn =
-    let init () = () in
-    let push () x = fn x in
-    let full () = false in
-    let stop () = () in
+    let rec terminate ?exn orphans =
+      match (Miou.care orphans, exn) with
+      | None, None -> Ok orphans
+      | None, Some exn -> Error exn
+      | Some None, _ -> Miou.yield (); terminate ?exn orphans
+      | Some (Some prm), _ -> (
+          match (Miou.await prm, exn) with
+          | Ok (), _ -> terminate ?exn orphans
+          | Error exn, None -> terminate ~exn orphans
+          | Error _, _ -> terminate ?exn orphans)
+    in
+    let rec clean orphans =
+      match Miou.care orphans with
+      | None | Some None -> Ok orphans
+      | Some (Some prm) -> (
+          match Miou.await prm with
+          | Ok () -> clean orphans
+          | Error exn -> terminate ~exn orphans)
+    in
+    let init () = Ok (Miou.orphans ()) in
+    let push value x =
+      match Result.bind value clean with
+      | Ok orphans ->
+          ignore (Miou.async ~orphans @@ fun () -> fn x);
+          Ok orphans
+      | Error _ as err -> err
+    in
+    let full = Result.is_error in
+    let stop value =
+      match Result.bind value terminate with
+      | Ok _orphans -> ()
+      | Error exn -> raise exn
+    in
     Sink { init; stop; full; push }
 end
 
@@ -486,26 +515,7 @@ module Stream = struct
   let map fn t = via (Flow.map fn) t
   let to_file filename = into (Sink.file filename)
   let drain t = into Sink.drain t
-
-  let rec terminate orphans =
-    match Miou.care orphans with
-    | None -> ()
-    | Some None -> Miou.yield (); terminate orphans
-    | Some (Some prm) -> Miou.await_exn prm; terminate orphans
-
-  let rec clean orphans =
-    match Miou.care orphans with
-    | None | Some None -> ()
-    | Some (Some prm) -> Miou.await_exn prm; clean orphans
-
-  let each fn t =
-    let orphans = Miou.orphans () in
-    let fn value =
-      clean orphans;
-      ignore (Miou.async ~orphans @@ fun () -> fn value)
-    in
-    into (Sink.each fn) t;
-    terminate orphans
+  let each fn t = into (Sink.each fn) t
 
   let bracket : init:(unit -> 's) -> stop:('s -> 'r) -> ('s -> 's) -> 'r =
    fun ~init ~stop fn ->

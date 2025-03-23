@@ -52,21 +52,96 @@ module Method : sig
 end
 
 module Multipart_form : sig
+  (** Vif proposes a way to describe a form via types in order to decode a
+      [multipart-form/data] request and obtain an OCaml record.
+
+      Let's take a form such as:
+
+      {[
+        <form>
+          <label for="username">Username:</label>
+          <input type="text" name="username" id="username" required />
+          <label for="password">Password:</label>
+          <input type="password" name="password" id="password" required />
+        </form>
+      ]}
+
+      It is possible to describe this server-side form in this way:
+
+      {[
+        type credential = { username: string; password: string }
+
+        let form =
+          let open Vif.Multipart_form in
+          let fn username password = { username; password } in
+          record fn
+          |+ field "username" string
+          |+ field "password" string
+          |> sealr
+      ]}
+
+      It is then possible to define a POST route to manage such a form:
+
+      {[
+        let login req _server _cfg =
+          match Vif.Request.of_multipart_form req with
+          | Ok { username; password; } -> ...
+          | Error _ -> ...
+
+        let routes =
+          let open Vif.U in
+          let open Vif.R in
+          let open Vif.R in
+          [ post (m form) (rel / "login" /?? nil) --> login ]
+      ]} *)
+
   type 'a t
+  (** The type for runtime representation of forms of type ['a]. *)
+
   type 'a atom
+  (** The type for runtime representation of fields of type ['a]. *)
 
   val string : string atom
+  (** [string] is a representation of the string type. *)
+
   val int : int atom
+  (** [int] is a representation of the int type. *)
 
   type ('a, 'b, 'c) orecord
+  (** The type for representing open records of type ['a] with a constructor of
+      type ['b]. ['c] represents the remaining fields to be described using the
+      {!val:(|+)} operator. An open record initially satisfies ['c = 'b] and can
+      be {{!val:sealr} sealed} once ['c = 'a]. *)
 
   val record : 'b -> ('a, 'b, 'b) orecord
+  (** [record fn] is an incomplete representation of the record of type ['a]
+      with constructor [fn]. To complete the representation, add fields with
+      {!val:(|+)} and then seal the record with {!val:sealr}. *)
 
   type 'a field
+  (** The type for fields belonging to a record of type ['a]. *)
 
   val field : string -> 'a atom -> 'a field
+  (** [field name t] is the representation of the field called [name] of type
+      [t]. The name must be unique in relation to the other fields in the form
+      and must also correspond to the name given to the [<input />] in the form.
+  *)
+
   val ( |+ ) : ('a, 'b, 'c -> 'd) orecord -> 'c field -> ('a, 'b, 'd) orecord
+  (** [record |+ field] is the open record [record] augmented with the field
+      [field]. *)
+
   val sealr : ('a, 'b, 'a) orecord -> 'a t
+  (** [sealr record] seals the open record [record].
+
+      @raise Invalid_argument if two or more fields share the same name. *)
+
+  (** {3 Streaming API of [multipart-form/data] requests.}
+
+      The user may want to manage a request containing a form in the form of a
+      stream. This is particularly useful if you want to upload a file (and,
+      instead of storing it in memory, directly write the received file to a
+      temporary file). *)
 
   type part
 
@@ -178,7 +253,7 @@ module D : sig
   (** {3 Devices.}
 
       A device is a global instance on the http server with which a "finaliser"
-      is associated. A device is available from all requests from a {!type:S.t}
+      is associated. A device is available from all requests from a {!type:G.t}
       value. The same device instance is available from all domains —
       interactions with a device must therefore be {i domain-safe}.
 
@@ -229,56 +304,69 @@ module Ms : sig
 end
 
 module Status : sig
-  type t =
-    [ `Accepted
-    | `Bad_gateway
-    | `Bad_request
-    | `Code of int
-    | `Conflict
-    | `Continue
+  type informational = [ `Continue | `Switching_protocols ]
+
+  type successful =
+    [ `OK
     | `Created
-    | `Enhance_your_calm
-    | `Expectation_failed
-    | `Forbidden
-    | `Found
-    | `Gateway_timeout
-    | `Gone
-    | `Http_version_not_supported
-    | `I_m_a_teapot
-    | `Internal_server_error
-    | `Length_required
-    | `Method_not_allowed
-    | `Misdirected_request
-    | `Moved_permanently
-    | `Multiple_choices
-    | `Network_authentication_required
-    | `No_content
+    | `Accepted
     | `Non_authoritative_information
-    | `Not_acceptable
-    | `Not_found
-    | `Not_implemented
-    | `Not_modified
-    | `OK
-    | `Partial_content
-    | `Payload_too_large
-    | `Payment_required
-    | `Precondition_failed
-    | `Precondition_required
-    | `Proxy_authentication_required
-    | `Range_not_satisfiable
-    | `Request_header_fields_too_large
-    | `Request_timeout
+    | `No_content
     | `Reset_content
+    | `Partial_content ]
+
+  type redirection =
+    [ `Multiple_choices
+    | `Moved_permanently
+    | `Found
     | `See_other
-    | `Service_unavailable
-    | `Switching_protocols
+    | `Not_modified
     | `Temporary_redirect
-    | `Too_many_requests
-    | `Unauthorized
-    | `Unsupported_media_type
-    | `Upgrade_required
-    | `Uri_too_long
     | `Use_proxy ]
+  (* | `Permanent_redirect ] *)
+
+  type client_error =
+    [ `Bad_request
+    | `Unauthorized
+    | `Payment_required
+    | `Forbidden
+    | `Not_found
+    | `Method_not_allowed
+    | `Not_acceptable
+    | `Proxy_authentication_required
+    | `Request_timeout
+    | `Conflict
+    | `Gone
+    | `Length_required
+    | `Precondition_failed
+    | `Payload_too_large
+    | `Uri_too_long
+    | `Unsupported_media_type
+    | `Range_not_satisfiable
+    | `Expectation_failed
+    | `Misdirected_request
+    | (* | `Too_early *)
+      `Upgrade_required
+    | `Precondition_required
+    | `Too_many_requests
+    | `Request_header_fields_too_large
+    | `Enhance_your_calm
+    | `I_m_a_teapot ]
+  (* | `Unavailable_for_legal_reasons ] *)
+
+  type server_error =
+    [ `Internal_server_error
+    | `Not_implemented
+    | `Bad_gateway
+    | `Service_unavailable
+    | `Gateway_timeout
+    | `Http_version_not_supported
+    | `Network_authentication_required ]
+
+  type standard =
+    [ informational | successful | redirection | client_error | server_error ]
+
+  type t = [ standard | `Code of int ]
 end
 
 module Response : sig
