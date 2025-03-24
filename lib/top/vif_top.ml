@@ -52,8 +52,7 @@ module Lexbuf = struct
 end
 
 let pp_location ppf { Lexing.pos_fname; pos_lnum; pos_bol; _ } =
-  if pos_fname = ""
-  then Fmt.pf ppf "%@ l.%d.%d" pos_lnum pos_bol
+  if pos_fname = "" then Fmt.pf ppf "%@ l.%d.%d" pos_lnum pos_bol
   else Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum pos_bol
 
 module Phrase = struct

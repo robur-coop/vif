@@ -5,8 +5,7 @@
     producer. The bounded queue has a fixed size of elements that it can hold.
     If the producer fills the queue without the consumer consuming it, the
     producer will ultimately "block" until the consumer has at least consumed
-    one value from the queue.
-*)
+    one value from the queue. *)
 
 module Bqueue : sig
   type 'a t
@@ -24,8 +23,8 @@ end
     Elements are pulled from a source when needed. A source can have an internal
     state that will be lazily initialized when (and if) a consumer requests
     elements. The internal state will be safely disposed when the source runs
-    out of elements, when the consumer terminates, or if an exception is
-    raised at any point in the streaming pipeline.
+    out of elements, when the consumer terminates, or if an exception is raised
+    at any point in the streaming pipeline.
 
     Sources are a great way to define decoupled producers that can be consumed
     with {!val:Stream.from}.
@@ -79,8 +78,8 @@ end
     Sinks are a great way to define decoupled consumers that can be filled with
     {!val:Stream.into}.
 
-    The following example demonstrates a sink that consumes all elements into
-    a list:
+    The following example demonstrates a sink that consumes all elements into a
+    list:
 
     {[
       let list =
@@ -113,10 +112,10 @@ end
 
     Flows are decoupled transformers of values.
 
-    Flows define streaming transformation, filtering or grouping operations
-    that are fully disconnected from input and output. Their implementation
-    intercepts an internal folding function and modifies the input one value
-    at a time.
+    Flows define streaming transformation, filtering or grouping operations that
+    are fully disconnected from input and output. Their implementation
+    intercepts an internal folding function and modifies the input one value at
+    a time.
 
     Flows are great way to define decoupled transformations that can be used
     with {!val:Stream.via}.
