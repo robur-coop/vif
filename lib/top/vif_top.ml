@@ -52,15 +52,19 @@ module Lexbuf = struct
 end
 
 let pp_location ppf { Lexing.pos_fname; pos_lnum; pos_bol; _ } =
-  Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum pos_bol
+  if pos_fname = ""
+  then Fmt.pf ppf "%@ l.%d.%d" pos_lnum pos_bol
+  else Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum pos_bol
 
 module Phrase = struct
   open Lexing
   open Parsetree
 
+  type error = Location.report
+
   type t = {
       startpos: position
-    ; parsed: (Parsetree.toplevel_phrase, exn) result
+    ; parsed: (Parsetree.toplevel_phrase, error) result
   }
 
   let result t = t.parsed
@@ -87,7 +91,7 @@ module Phrase = struct
                 Log.err (fun m ->
                     m "Shift (%a) syntax error: %s" pp_location startpos
                       (Printexc.to_string exn));
-                Location.Error (Lexbuf.shift_location_error startpos error)
+                Lexbuf.shift_location_error startpos error
           in
           begin
             if lexbuf.Lexing.lex_last_action <> Lexbuf.semisemi_action then
@@ -207,7 +211,7 @@ let config ~stdlib roots =
 
 let eval _cfg ppf ph =
   match Phrase.result ph with
-  | Error exn -> raise exn
+  | Error err -> raise (Location.Error err)
   | Ok phrase -> begin
       Warnings.reset_fatal ();
       let mapper = Lexbuf.position_mapper (Phrase.start ph) in
