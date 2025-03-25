@@ -154,6 +154,15 @@ module Multipart_form : sig
 end
 
 module T : sig
+  (** {3:type-of-requests Type of requests.}
+
+      Vif is able to dispatch requests not only by the route but also by the
+      type of content of the request (given by the ["Content-Type"]). These
+      values represent a certain type such as the type "application/json" or
+      "multipart-form/data". These last two can be completed by an "encoding"
+      making it possible to transform the {i raw} content of the requests into
+      an OCaml value. *)
+
   type null
   type json
   type multipart_form
@@ -186,6 +195,15 @@ module Request : sig
 
   val source : ('c, 'a) t -> string S.source
   val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
+
+  (** {3:request-middleware Requests for middlewares}
+
+      As soon as it comes to executing the various middlewares ({!type:M.t})
+      defined by the user, the latter can manipulate the HTTP request given by
+      the client. However, the latter has a limitation: the body of the request
+      {b cannot} be obtained from the {!type:request} type of value. Indeed,
+      middlewares should not manipulate the body of requests and should only
+      refer to meta-data (such as {{!val:headers_of_request} headers}). *)
 
   type request
 
@@ -294,6 +312,9 @@ module G : sig
   type t
 
   val device : ('value, 'a) D.device -> t -> 'a
+  (* [device w t] returns the device specified by the [w] parameter and the
+     server [t]. If the latter has not been initialized via the {!val:Vif.run}
+     function, the function raises an exception [Not_found]. *)
 end
 
 module Ms : sig
@@ -413,9 +434,20 @@ module Response : sig
   (** Headers manipulation. *)
 
   val add : field:string -> string -> ('p, 'p, unit) t
+  (** [add ~field value] adds a new [field] with the given [value] into the
+      futur response. *)
+
   val rem : field:string -> ('p, 'p, unit) t
+  (** [rem ~field value] removes a [field] from the futur response. *)
+
   val set : field:string -> string -> ('p, 'p, unit) t
+  (** [set ~field value] sets the [field] value to the new given [value] into
+      the futur response. If the [field] does not exist, [set] adds it. *)
+
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
+  (** [add_unless_exists ~field value] adds a new [field] with the given
+      [value] into the futur response only if the given [field] does not
+      exists yet. *)
 end
 
 module Cookie : sig
@@ -440,6 +472,8 @@ module Cookie : sig
     -> G.t
     -> Request.request
     -> (string, [> error ]) result
+  (** [get ?encrypted ~name server req] returns the value associated to the key
+      [name] from cookies. By default, cookies are encrypted. *)
 
   val pp_error : error Fmt.t
 

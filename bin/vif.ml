@@ -19,7 +19,7 @@ let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 let run _quiet () roots stdlib main =
   let roots = List.map Fpath.to_string roots in
   let cfg = Vif_top.config ~stdlib roots in
-  let main =
+  let lines =
     let ic = open_in (Fpath.to_string main) in
     let finally () = close_in ic in
     Fun.protect ~finally @@ fun () ->
@@ -30,7 +30,11 @@ let run _quiet () roots stdlib main =
     in
     go []
   in
-  match Vif_top.eval cfg main with Ok () -> () | Error () -> exit 1
+  match Vif_top.eval ~filename:(Fpath.to_string main) cfg ~lines with
+  | Ok () -> ()
+  | Error err ->
+      Fmt.epr "%a%!" (Vif_top.pp_error ?file:None) err;
+      exit 1
 
 open Cmdliner
 

@@ -11,22 +11,20 @@ let errors = ref false
 module Lexbuf = struct
   open Lexing
 
-  let toplevel_fname = "//vif//"
-
-  let shift_toplevel_position ~start pos =
+  let shift_toplevel_position filename ~start pos =
     {
-      pos_fname= toplevel_fname
-    ; pos_lnum= pos.pos_lnum - start.pos_lnum + 1
-    ; pos_bol= pos.pos_bol - start.pos_cnum - 1
-    ; pos_cnum= pos.pos_cnum - start.pos_cnum
+      pos_fname= filename
+    ; pos_lnum= pos.pos_lnum + start.pos_lnum
+    ; pos_bol= pos.pos_bol + start.pos_cnum
+    ; pos_cnum= pos.pos_cnum + start.pos_cnum
     }
 
-  let shift_toplevel_location ~start loc =
+  let shift_toplevel_location filename ~start loc =
     let open Location in
     {
       loc with
-      loc_start= shift_toplevel_position ~start loc.loc_start
-    ; loc_end= shift_toplevel_position ~start loc.loc_end
+      loc_start= shift_toplevel_position filename ~start loc.loc_start
+    ; loc_end= shift_toplevel_position filename ~start loc.loc_end
     }
 
   let semisemi_action =
@@ -39,21 +37,22 @@ module Lexbuf = struct
     let fn_msg (msg : Location.msg) = { msg with loc= fn msg.loc } in
     { error with main= fn_msg error.main; sub= List.map fn_msg error.sub }
 
-  let shift_location_error start =
-    map_error_loc ~fn:(shift_toplevel_location ~start)
+  let shift_location_error filename start =
+    map_error_loc ~fn:(shift_toplevel_location filename ~start)
 
-  let position_mapper start =
+  let position_mapper ~filename start =
     let open Ast_mapper in
-    let start = { start with pos_fname= toplevel_fname } in
+    let start = { start with pos_fname= filename } in
     let location mapper loc =
-      shift_toplevel_location ~start (default_mapper.location mapper loc)
+      shift_toplevel_location filename ~start
+        (default_mapper.location mapper loc)
     in
     { default_mapper with location }
 end
 
-let pp_location ppf { Lexing.pos_fname; pos_lnum; pos_bol; _ } =
-  if pos_fname = "" then Fmt.pf ppf "%@ l.%d.%d" pos_lnum pos_bol
-  else Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum pos_bol
+let pp_lexing_position ppf { Lexing.pos_fname; pos_lnum; pos_cnum; pos_bol } =
+  if pos_fname = "" then Fmt.pf ppf "%@ l.%d.%d" pos_lnum (pos_cnum - pos_bol)
+  else Fmt.pf ppf "%S %@ l.%d.%d" pos_fname pos_lnum (pos_cnum - pos_bol)
 
 module Phrase = struct
   open Lexing
@@ -75,10 +74,10 @@ module Phrase = struct
     | Some `Already_displayed -> None
     | Some (`Ok error) -> Some error
 
-  let parse lines =
+  let parse ~filename:pos_fname ~line:pos_lnum lines =
     let contents = String.concat "\n" lines in
     let lexbuf = Lexing.from_string contents in
-    let startpos = lexbuf.Lexing.lex_start_p in
+    let startpos = { Lexing.pos_fname; pos_lnum; pos_bol= 0; pos_cnum= 0 } in
     let parsed =
       match !Toploop.parse_toplevel_phrase lexbuf with
       | phrase -> Ok phrase
@@ -87,10 +86,9 @@ module Phrase = struct
             match error_of_exn exn with
             | None -> raise exn
             | Some error ->
-                Log.err (fun m ->
-                    m "Shift (%a) syntax error: %s" pp_location startpos
-                      (Printexc.to_string exn));
-                Lexbuf.shift_location_error startpos error
+                Log.debug (fun m ->
+                    m "shift location to %a" pp_lexing_position startpos);
+                Lexbuf.shift_location_error pos_fname startpos error
           in
           begin
             if lexbuf.Lexing.lex_last_action <> Lexbuf.semisemi_action then
@@ -106,8 +104,10 @@ module Phrase = struct
     in
     { startpos; parsed }
 
-  let parse lines =
-    match parse lines with exception End_of_file -> None | t -> Some t
+  let parse ~filename ~line lines =
+    match parse ~filename ~line lines with
+    | exception End_of_file -> None
+    | t -> Some t
 
   let top_directive_name (toplevel_phrase : Parsetree.toplevel_phrase) =
     match toplevel_phrase with
@@ -208,12 +208,12 @@ let config ~stdlib roots =
   let cfg = { stdlib; roots } in
   init cfg; cfg
 
-let eval _cfg ppf ph =
+let eval ~filename _cfg ppf ph =
   match Phrase.result ph with
   | Error err -> raise (Location.Error err)
   | Ok phrase -> begin
       Warnings.reset_fatal ();
-      let mapper = Lexbuf.position_mapper (Phrase.start ph) in
+      let mapper = Lexbuf.position_mapper ~filename (Phrase.start ph) in
       let phrase =
         match phrase with
         | Parsetree.Ptop_def str ->
@@ -301,14 +301,18 @@ let rec ends_by_semi_semi = function
       && x.[String.length x - 2] = ';'
   | _ :: r -> ends_by_semi_semi r
 
-let cut_into_phrases lst =
-  let rec go acc phrase = function
-    | [] -> List.rev (List.rev phrase :: acc)
+let cut_into_phrases lines =
+  let rec go line acc rphrase = function
+    | [] ->
+        let phrase = List.rev rphrase in
+        List.rev ((line, phrase) :: acc)
     | x :: r when ends_by_semi_semi [ x ] ->
-        go (List.rev (x :: phrase) :: acc) [] r
-    | x :: r -> go acc (x :: phrase) r
+        let phrase = List.rev (x :: rphrase) in
+        let succ = List.length phrase in
+        go (line + succ) ((line, phrase) :: acc) [] r
+    | x :: r -> go line acc (x :: rphrase) r
   in
-  go [] [] lst
+  go 0 [] [] lines
 
 let retrieve_report exn =
   let rec loop n exn =
@@ -320,7 +324,25 @@ let retrieve_report exn =
   in
   loop 5 exn
 
-let eval cfg file =
+type error =
+  [ `Syntax of Lexing.position * Location.report
+  | `Report of Location.report option ]
+
+let pp_loc ppf { Warnings.loc_start; loc_end; loc_ghost= _ } =
+  Fmt.pf ppf "%a - %a" pp_lexing_position loc_start pp_lexing_position loc_end
+
+let pp_error ?file:_ ppf = function
+  | `Syntax (_, { Location.kind= Report_error; main; sub; _ })
+  | `Report (Some { Location.kind= Report_error; main; sub; _ }) ->
+      let { Location.txt; loc } = main in
+      Fmt.pf ppf "%a %a\n%!" Format_doc.Doc.format txt pp_loc loc;
+      let fn { Location.txt; loc } =
+        Fmt.pf ppf "%a %a\n%!" Format_doc.Doc.format txt pp_loc loc
+      in
+      List.iter fn sub
+  | _ -> ()
+
+let eval ~filename cfg ~lines =
   let ppf = Format.formatter_of_out_channel stderr in
   errors := false;
   let eval phrase =
@@ -332,7 +354,7 @@ let eval cfg file =
     Oprint.out_phrase := fn_out_phrase;
     let restore () = Oprint.out_phrase := out_phrase in
     let result =
-      match eval cfg ppf phrase with
+      match eval ~filename cfg ppf phrase with
       | ok ->
           errors := (not ok) || !errors;
           restore ();
@@ -348,27 +370,20 @@ let eval cfg file =
     result
   in
   capture_compiler_stuff ppf @@ fun () ->
-  let file =
-    match file with [] | [ _ ] -> file | x :: r -> x :: List.map (( ^ ) " ") r
-  in
-  let phrases = cut_into_phrases file in
-  let fn acc phrase =
+  let phrases = cut_into_phrases lines in
+  let fn acc (line, phrase) =
     match acc with
     | Error _ as err -> err
     | Ok () -> (
         Log.debug (fun m ->
             m "Parse phrase: %a" Fmt.(Dump.list (fmt "%S")) phrase);
-        match Phrase.parse phrase with
-        | Some t ->
-            Log.debug (fun m ->
-                m "Eval phrase: %a" Fmt.(Dump.list (fmt "%S")) phrase);
-            begin
-              match eval t with
-              | Ok () -> Ok ()
-              | Error reports -> Error (`Reports reports)
-            end
-        | None -> Error `Syntax)
+        match Phrase.parse ~filename ~line phrase with
+        | None -> Ok () (* TODO(dinosaure): check this case. *)
+        | Some { parsed= Error report; startpos } ->
+            Error (`Syntax (startpos, report))
+        | Some t -> (
+            match eval t with
+            | Ok () -> Ok ()
+            | Error report -> Error (`Report report)))
   in
-  match List.fold_left fn (Ok ()) phrases with
-  | Ok _ as value -> value
-  | Error _ -> Error ()
+  List.fold_left fn (Ok ()) phrases

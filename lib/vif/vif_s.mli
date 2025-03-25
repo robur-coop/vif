@@ -73,7 +73,7 @@ end
     Sinks are streaming abstractions that consume values and produce an
     aggregated value as a result. The result value is extracted from an internal
     state that is built incrementally. The internal state can acquire resources
-    that are guaranteeed to be terminated when the sink is filled.
+    that are guaranteed to be terminated when the sink is filled.
 
     Sinks are a great way to define decoupled consumers that can be filled with
     {!val:Stream.into}.
@@ -165,6 +165,25 @@ module Flow : sig
   val bound : int -> ('a, 'a) flow
 end
 
+(** {1:streams Streams.}
+
+    Streams combine sources, sinks and flows into a flexible streaming toolkit.
+
+    Stream is a purely functional abstraction for incremental, push-based,
+    sequential processing of elements. Streams can be easily and efficiently
+    transformed and concatenated.
+
+    Stream operations do not leak resources. This is guaranteed in the presence
+    of early termination (when not all stream elements are consumed) or in case
+    of exceptions in the streaming pipeline.
+
+    Streams are built to be compatible with {{:#sources} sources},
+    {{:#sinks} sinks} and {{:#flows} flows}. To create a stream that produces
+    all elements from a source use {!val:Stream.from}. to consume a stream with
+    a sink use {!val:Stream.into} and to transform stream elements with a flow
+    use {!val:Stream.via}. For more sophisticated pipelines that might have
+    source leftovers, {!val:Stream.run} can be used. *)
+
 type 'a stream = { stream: 'r. ('a, 'r) sink -> 'r } [@@unboxed]
 
 module Stream : sig
@@ -173,14 +192,47 @@ module Stream : sig
     -> via:('a, 'b) flow
     -> into:('b, 'c) sink
     -> 'c * 'a source option
+  (** Fuses sources, sinks and flows and produces a result and a leftover.
+
+      {[
+        let r, leftover = Stream.run ~from:source ~via:flow ~into:sink
+      ]}
+
+      Streams elements from [source] into [sink] via a stream transformer
+      [flow]. In addition to the result value [r] produced by [sink], a
+      [leftover] source is returned, if [source] was not exhausted.
+
+      {b Note.} If a leftover source is produced, it is required to either
+      consume it or manually {{!val:Source.dispose} dispose} its resources. Not
+      doing so might lead to resource leaks. *)
 
   val into : ('a, 'b) sink -> 'a stream -> 'b
+  (** [into sink stream] is the result value produced by streaming all elements
+      of [stream] into [sink]. *)
+
   val via : ('a, 'b) flow -> 'a stream -> 'b stream
+  (** [via flow stream] is stream produced by transforming all elements of
+      [stream] via [flow]. *)
+
   val from : 'a source -> 'a stream
+  (** [from source] is a stream created from a source. *)
+
   val map : ('a -> 'b) -> 'a stream -> 'b stream
+  (** A stream with all elements transformed with a mapping function. *)
+
   val of_bqueue : string Bqueue.t -> string stream
+
   val flat_map : ('a -> 'b stream) -> 'a stream -> 'b stream
+  (** [flat_map fn stream] is a stream concatenated from sub-streams produced by
+      applying [fn] to all elements of [stream]. *)
+
   val to_file : string -> string stream -> unit
+  (** [to_file filename stream] writes bytes from [stream] into the file located
+      at [filename]. *)
+
   val drain : 'a stream -> unit
+
   val each : ('a -> unit) -> 'a stream -> unit
+  (** [each fn stream] applies an function [fn] to all elements of stream. Each
+      function is performed cooperatively via the Miou scheduler. *)
 end
