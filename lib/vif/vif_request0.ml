@@ -8,7 +8,6 @@ type t = {
   ; reqd: reqd
   ; socket: socket
   ; on_localhost: bool
-  ; source: string Vif_s.source
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
 }
 
@@ -16,12 +15,23 @@ and reqd = Httpcats.Server.reqd
 and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ]
 and request = V1 of H1.Request.t | V2 of H2.Request.t
 
+let peer { socket; _ } =
+  let file_descr =
+    match socket with
+    | `Tcp v -> Miou_unix.to_file_descr v
+    | `Tls v -> Miou_unix.to_file_descr (Tls_miou_unix.file_descr v)
+  in
+  match Unix.getpeername file_descr with
+  | Unix.ADDR_INET (inet_addr, port) ->
+      Fmt.str "%s:%d" (Unix.string_of_inet_addr inet_addr) port
+  | Unix.ADDR_UNIX v -> Fmt.str "<%s>" v
+
 let to_source ~schedule ~close body =
   Vif_s.Source.with_task ~limit:0x100 @@ fun bqueue ->
   let rec on_eof () =
-    Log.debug (fun m -> m "-> request body closed");
     close body;
-    Vif_s.Bqueue.close bqueue
+    Vif_s.Bqueue.close bqueue;
+    Log.debug (fun m -> m "-> request body closed")
   and on_read bstr ~off ~len =
     let str = Bigstringaf.substring bstr ~off ~len in
     Log.debug (fun m -> m "-> + %d byte(s)" (String.length str));
@@ -64,8 +74,7 @@ let of_reqd socket reqd =
         inet_addr = Unix.inet_addr_loopback
         || inet_addr = Unix.inet6_addr_loopback
   in
-  let source = to_source reqd in
-  { request; tls; reqd; socket; on_localhost; source; body }
+  { request; tls; reqd; socket; on_localhost; body }
 
 let headers { request; _ } =
   match request with
@@ -96,7 +105,10 @@ let version { request; _ } = match request with V1 _ -> 1 | V2 _ -> 2
 let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost
 let reqd { reqd; _ } = reqd
-let source { source; _ } = source
+
+let source { reqd; _ } =
+  Log.debug (fun m -> m "the user request for a source of the request");
+  to_source reqd
 
 let close { body; _ } =
   match body with

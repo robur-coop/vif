@@ -419,17 +419,24 @@ let rec user's_functions daemon =
   let fn (User's_task (req0, fn)) =
     let _prm =
       Miou.async ~orphans:daemon.orphans @@ fun () ->
-      match
-        Vif_response.(run req0 empty) (fn daemon.server daemon.user's_value)
-      with
-      | Vif_response.Sent, () -> Vif_request0.close req0
-      | exception exn -> Vif_request0.report_exn req0 exn
+      try
+        let Vif_response.Sent, () =
+          Vif_response.(run req0 empty) (fn daemon.server daemon.user's_value)
+        in
+        Vif_request0.close req0;
+        Log.debug (fun m ->
+            m "user's handler for %s terminated" (Vif_request0.peer req0))
+      with exn ->
+        Log.err (fun m ->
+            m "Got an exception from the user's handler: %s"
+              (Printexc.to_string exn));
+        Vif_request0.report_exn req0 exn
     in
     ()
   in
   List.iter fn tasks; user's_functions daemon
 
-let handler _cfg ~default ~middlewares routes daemon =
+let handler ~default ~middlewares routes daemon =
   ();
   fun socket reqd ->
     let req0 = Vif_request0.of_reqd socket reqd in
@@ -454,7 +461,7 @@ type config = Vif_config.config
 let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
 let config = Vif_config.config
 
-let process stop cfg server user's_value fn =
+let process stop cfg server user's_value ready fn =
   Logs.debug (fun m ->
       m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
   let daemon =
@@ -477,25 +484,30 @@ let process stop cfg server user's_value fn =
   match (cfg.Vif_config.http, cfg.Vif_config.tls) with
   | config, Some tls ->
       Httpcats.Server.with_tls ~parallel ?stop ?config ~backlog:cfg.backlog tls
-        ~handler:fn cfg.sockaddr;
+        ~ready ~handler:fn cfg.sockaddr;
       Miou.cancel user's_tasks
   | Some (`H2 _), None ->
       Miou.cancel user's_tasks;
+      assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      Httpcats.Server.clear ~parallel ?stop ~config ~handler:fn cfg.sockaddr;
+      Httpcats.Server.clear ~parallel ?stop ~config ~ready ~handler:fn
+        cfg.sockaddr;
       Miou.cancel user's_tasks
   | None, None ->
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Httpcats.Server.clear ~parallel ?stop ~handler:fn cfg.sockaddr;
+      Httpcats.Server.clear ~parallel ?stop ~ready ~handler:fn cfg.sockaddr;
       Miou.cancel user's_tasks
 
 let store_pid = function
   | None -> ()
   | Some v ->
+      Log.debug (fun m -> m "Create PID file");
       let oc = open_out (Fpath.to_string v) in
       output_string oc (string_of_int (Unix.getpid ()));
-      close_out oc
+      close_out oc;
+      let delete () = try Unix.unlink (Fpath.to_string v) with _exn -> () in
+      at_exit delete
 
 let default req target _server _user's_value =
   let pp_field ppf (k, v) =
@@ -536,7 +548,6 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
   let domains = cfg.domains in
-  store_pid cfg.pid;
   let stop =
     match interactive with
     | true ->
@@ -555,19 +566,31 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   Logs.debug (fun m -> m "devices launched");
   let server = { Vif_g.devices; cookie_key= cfg.Vif_config.cookie_key } in
   let default = default_from_handlers handlers in
-  let fn0 = handler cfg ~default ~middlewares routes in
-  let prm0 = Miou.async @@ fun () -> process stop cfg server user's_value fn0 in
+  let fn0 = handler ~default ~middlewares routes in
+  let rd0 = Miou.Computation.create () in
+  let prm0 =
+    Miou.async @@ fun () -> process stop cfg server user's_value rd0 fn0
+  in
   let tasks =
-    let fn _ = handler cfg ~default ~middlewares routes in
+    let fn _ =
+      let ready = Miou.Computation.create () in
+      (ready, handler ~default ~middlewares routes)
+    in
     List.init domains fn
   in
-  let tasks =
-    if domains > 0 then
-      Miou.parallel (process stop cfg server user's_value) tasks
-    else []
+  let prm1 =
+    Miou.async @@ fun () ->
+    let rdn = rd0 :: List.map fst tasks in
+    List.iter Miou.Computation.await_exn rdn;
+    store_pid cfg.pid
+  in
+  let prmn =
+    let fn (ready, fn) = process stop cfg server user's_value ready fn in
+    if domains > 0 then Miou.parallel fn tasks else []
   in
   Miou.await_exn prm0;
-  List.iter (function Ok () -> () | Error exn -> raise exn) tasks;
+  Miou.await_exn prm1;
+  List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
   Ds.finally (Vif_d.Devices devices);
   Log.debug (fun m -> m "Vif (and devices) terminated")
 

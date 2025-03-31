@@ -1,0 +1,10 @@
+(cram
+ (package vif)
+ (deps
+  %{bin:vif}
+  waitfile.exe
+  (source_tree examples)))
+
+(executable
+ (name waitfile)
+ (libraries unix))

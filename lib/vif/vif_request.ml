@@ -35,17 +35,24 @@ let of_json : type a. (Vif_t.json, a) t -> (a, [> `Msg of string ]) result =
   function
   | { encoding= Any; _ } as req -> Ok (to_string req)
   | { encoding= Json; _ } as req ->
-      let src = source req in
-      Vif_s.Stream.from src |> Vif_s.(Stream.into (Sink.json ()))
+      let open Vif_s in
+      let from = source req in
+      let res, src = Stream.run ~from ~via:Flow.identity ~into:(Sink.json ()) in
+      Option.iter Source.dispose src;
+      res
   | { encoding= Json_encoding encoding; _ } as req -> begin
-      let src = source req in
-      let res = Vif_s.Stream.from src |> Vif_s.(Stream.into (Sink.json ())) in
+      let open Vif_s in
+      let from = source req in
+      let res, src = Stream.run ~from ~via:Flow.identity ~into:(Sink.json ()) in
+      Option.iter Source.dispose src;
       match res with
-      | Error (`Msg _) as err -> err
+      | Error (`Msg msg) as err ->
+          Log.err (fun m -> m "Invalid JSON: %s" msg);
+          err
       | Ok (json : Json.t) -> begin
           try Ok (destruct encoding json)
           with Json_encoding.Cannot_destruct (_, _) ->
-            error_msgf "Invalid JSON value"
+            error_msgf "Invalid JSON value (according to its encoding)"
         end
       | exception exn ->
           Log.err (fun m -> m "Invalid JSON: %s" (Printexc.to_string exn));

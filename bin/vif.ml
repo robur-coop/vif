@@ -16,6 +16,18 @@ let _reporter ppf =
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
+(*
+let daemonize () =
+  let fork () = match Unix.handle_unix_error Unix.fork with
+    | 0 -> exit 0
+    | _ -> () in
+  fork ();
+  ignore (Unix.setsid ());
+  fork ();
+  Unix.chdir pwd;
+  redirect_stdio_fds
+*)
+
 let run _quiet () roots stdlib main =
   let roots = List.map Fpath.to_string roots in
   let cfg = Vif_top.config ~stdlib roots in

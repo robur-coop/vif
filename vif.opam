@@ -25,6 +25,7 @@ depends: [
   "multipart_form-miou"
   "hmap"
   "tyxml"
+  "hurl" {with-test}
 ]
 conflicts: [ "result" {< "1.5"} ]
 build: [
@@ -35,11 +36,12 @@ build: [
 synopsis: ""
 
 pin-depends: [
-  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#303e9e5508a0aab6c52920183c114b23e79ab704" ]
-  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#1f0bf804c61338b8d0bc7cf15dd1e65f9d5699b3" ]
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#0c478c6ae2de8d29459f5b38fa1b9a3d720dc5fe" ]
+  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#7a1d4097e93317fd154b8a87752045eef5cefa3a" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "conan.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
   [ "conan-unix.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
   [ "conan-database.dev" "git+https://github.com/mirage/conan.git#37d60f2cb47ecf3d25f51ab4f3db053d4d4603a9" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#27db1d42bddbadcbf1de356342894d3abdc94ebf" ]
 ]

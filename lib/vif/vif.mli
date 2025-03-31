@@ -144,13 +144,59 @@ module Multipart_form : sig
       temporary file). *)
 
   type part
+  (** Type of a part from the [multipart-form/data] stream.
+
+      A part can specify several items of information such as:
+      - its {!val:name} (from the [name] parameter of the HTML tag)
+      - whether this part comes from a user file (with the
+        {{!val:filename} name} of the file)
+      - the {{!val:mime} MIME type} of the content (according to the client)
+      - as well as the {!val:size} of the content *)
 
   val name : part -> string option
+  (** [name part] is the name of the part (from the [name] parameter of the HTML
+      tag [<input />]). *)
+
   val filename : part -> string option
+  (** [filename part] is the client's filename of the uploaded file. *)
+
   val mime : part -> string option
+  (** [mime part] is the MIME type according to the client's webbrowser. *)
+
   val size : part -> int option
+  (** [size part] is the size of the part in bytes. *)
 
   type stream = (part * string S.source) S.stream
+  (** Type of a [multipart-form/data] stream.
+
+      It may be necessary to save part of a form as a file rather than storing
+      it in memory. Vif allows this using its form stream API. The user can
+      observe the parts of a form one after the other and manipulate the content
+      of these parts in the form of a stream:
+
+      {[
+        open Vif
+
+        let upload req server _ =
+          let fn (part, src) =
+            match Multipart_form.name part with
+            | Some "file" -> S.Stream.to_file "foo.txt" (S.Stream.from src)
+            | Some "name" ->
+                let value = S.(Stream.into Sink.string (Stream.from src)) in
+                Hashtbl.add form "name" value
+            | _ -> S.Stream.(drain (from src))
+          in
+          let stream = Result.get_ok (Request.of_multipart_form req) in
+          S.Stream.each fn stream;
+          match Hashtbl.find_opt form "name" with
+          | Some value ->
+              Unix.rename "foo.txt" value;
+              Response.respond `OK
+          | _ -> Response.respond `Bad_request
+      ]}
+
+      {b Note:} It is important to [drain] the parts that we are not familiar
+      with. *)
 end
 
 module T : sig
@@ -430,6 +476,8 @@ module Response : sig
     -> (e, f, unit) t
 
   val respond : Status.t -> (f, s, unit) t
+  (** [respond status] responds to the client with the given [status] and with
+      the {i already filled} body response. *)
 
   (** Headers manipulation. *)
 
@@ -445,12 +493,30 @@ module Response : sig
       the futur response. If the [field] does not exist, [set] adds it. *)
 
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
-  (** [add_unless_exists ~field value] adds a new [field] with the given
-      [value] into the futur response only if the given [field] does not
-      exists yet. *)
+  (** [add_unless_exists ~field value] adds a new [field] with the given [value]
+      into the futur response only if the given [field] does not exists yet. *)
 end
 
 module Cookie : sig
+  (** {2 Cookies.}
+
+      {!val:get} and {!val:set} are designed for round-tripping secure cookies.
+      The most secure settings applicable to the current server are inferred
+      automatically.
+
+      {[
+        let hello req server _ =
+          let value = Cookie.get ~name:"my-cookie" server req in
+          match value with
+          | "ping" ->
+              let* () = Cookie.set ~name:"my-cookie" server req "pong" in
+              Response.respond `OK
+          | "pong" ->
+              let* () = Cookie.set ~name:"my-cookie" server req "ping" in
+              Response.respond `OK
+          | _ -> Response.respond `OK
+      ]} *)
+
   type config
 
   val config :
