@@ -7,7 +7,7 @@ bug-reports: "https://github.com/robur-coop/vif/issues"
 license: "BSD-3-clause"
 
 depends: [
-  "ocaml" {>= "5.0.0"}
+  "ocaml" {>= "5.3.0"}
   "dune" {>= "2.0.0"}
   "fmt"
   "bos"
