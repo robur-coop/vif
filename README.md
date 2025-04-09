@@ -51,9 +51,9 @@ $ kill -SIGINT $(cat vid.pid)
 
 ### Examples
 
-The [examples](./examples) folder contains several examples of the use of `vif`.
-It shows the management of more complex requests (json, multipart-form, etc.) as
-well as the use of an SQL database with [caqti][caqti].
+The [examples](./test/examples) folder contains several examples of the use of
+`vif`. It shows the management of more complex requests (json, multipart-form,
+etc.) as well as the use of an SQL database with [caqti][caqti].
 
 [hurl]: https://github.com/robur-coop/hurl
 [caqti]: https://github.com/paurkedal/ocaml-caqti/

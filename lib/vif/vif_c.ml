@@ -8,7 +8,7 @@ type resolver =
 
 let request ?config ?tls_config ?authenticator ?meth ?headers ?body:_
     ?max_redirect ?follow_redirect ?resolver t =
-  let f _meta _response a _chunk = a in
+  let f _meta _request _response a _chunk = a in
   let fn uri =
     let uri = "https://" ^ uri in
     (* TODO *)

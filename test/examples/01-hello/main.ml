@@ -4,6 +4,7 @@ open Vif ;;
 
 let default req _server () =
   let str = "Hello World!\n" in
+  let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
   let* () = Response.with_string req str in
   Response.respond `OK
 ;;

@@ -364,10 +364,22 @@ module G : sig
 end
 
 module Ms : sig
+  (** {3:middlewares Middlewares.}
+
+      Middleware is a function {!type:fn} that applies to all requests. The user
+      can introspect the header (and only the header) of the requests in order
+      to add information (such as the connected user if a field in the header
+      provides such information). This information added to the request can be
+      retrieved from the handlers associated with the routes via
+      {!val:Request.get}. *)
+
   type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) M.t * 'cfg t -> 'cfg t
   type ('cfg, 'v) fn = Request.request -> string -> G.t -> 'cfg -> 'v option
 
   val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) M.t
+  (** [make ~name fn] creates a new {i middleware} which can be used by the
+      server (you must specify the {i witness} returned by this function into
+      {!val:run}). *)
 end
 
 module Status : sig
