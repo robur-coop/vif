@@ -2,7 +2,9 @@ module U : sig
   type 'a atom = 'a Tyre.t
 
   val int : int atom
-  val string : string atom
+  val string : [ `Path | `Query_value ] -> string atom
+  val bool : bool atom
+  val float : float atom
   val option : 'a atom -> 'a option atom
   val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
 
@@ -233,6 +235,7 @@ module Request : sig
   val meth : ('c, 'a) t -> Method.t
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
+  val accept : ('c, 'a) t -> string list
   val of_json : (T.json, 'a) t -> ('a, [ `Msg of string ]) result
 
   val of_multipart_form :
@@ -256,6 +259,11 @@ module Request : sig
   val headers_of_request : request -> Headers.t
   val method_of_request : request -> Method.t
   val target_of_request : request -> string
+end
+
+module Q : sig
+  val exists : ('c, 'a) Request.t -> string -> bool
+  val get : ('c, 'a) Request.t -> string -> string list
 end
 
 module R : sig

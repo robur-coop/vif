@@ -43,6 +43,10 @@
   $ hurl http://localhost:8080/echo/foo -p=b
   Hello, "foo"!
   
+ 
+  $ hurl http://localhost:8080/query foo==42 bar==dinosaure -p=b
+  foo: 42 ("42")
+  
   $ kill -INT $(cat vif.pid)
   $ cd examples/12-static/
   $ vif --pid-file vif.pid main.ml -p 8080 &

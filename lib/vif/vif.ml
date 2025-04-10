@@ -2,7 +2,28 @@ let src = Logs.Src.create "vif"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 module Json = Json
-module U = Vif_u
+
+module U = struct
+  include Vif_u
+
+  let int =
+    let prj = int_of_string and inj = string_of_int in
+    Tyre.(conv prj inj (regex Vif_r.Ext.arbitrary_int))
+
+  let string c = Tyre.regex (Vif_r.Ext.string c)
+
+  let bool =
+    let prj = function "true" -> true | _ -> false
+    and inj x = if x then "true" else "false" in
+    Tyre.(conv prj inj (regex Vif_r.Ext.bool))
+
+  let float =
+    let prj = float_of_string and inj = string_of_float in
+    Tyre.(conv prj inj (regex Vif_r.Ext.float))
+
+  let option = Tyre.opt
+  let conv = Tyre.conv
+end
 
 module R = struct
   include Vif_r
@@ -21,6 +42,7 @@ module C = Vif_c
 module D = Vif_d
 module G = Vif_g
 module M = Vif_m
+module Q = Vif_q
 
 module Ds = struct
   type 'value t =
@@ -438,23 +460,31 @@ let rec user's_functions daemon =
 
 let handler ~default ~middlewares routes daemon =
   ();
+  let dispatch = R.dispatch ~default routes in
   fun socket reqd ->
     let req0 = Vif_request0.of_reqd socket reqd in
     let ctx = to_ctx daemon req0 in
     let env = Ms.run middlewares ctx Vif_m.Hmap.empty in
     let request = recognize_request ~env req0 in
     let target = Vif_request0.target req0 in
-    let fn = R.dispatch ~default routes ~request ~target in
-    (* NOTE(dinosaure): the management of the http request must finish and above
-       all **not** block. Otherwise, the entire domain is blocked. Thus, the
-       management of a new request transfers the user task (which can block) to
-       our "daemon" instantiated in our current domain which runs cooperatively.
-    *)
-    begin
-      Miou.Mutex.protect daemon.mutex @@ fun () ->
-      Queue.push (User's_task (req0, fn)) daemon.queue;
-      Miou.Condition.signal daemon.condition
-    end
+    try
+      let fn = dispatch ~request ~target in
+      (* NOTE(dinosaure): the management of the http request must finish and above
+         all **not** block. Otherwise, the entire domain is blocked. Thus, the
+         management of a new request transfers the user task (which can block) to
+         our "daemon" instantiated in our current domain which runs cooperatively.
+      *)
+      begin
+        Miou.Mutex.protect daemon.mutex @@ fun () ->
+        Queue.push (User's_task (req0, fn)) daemon.queue;
+        Miou.Condition.signal daemon.condition
+      end
+    with exn ->
+      let bt = Printexc.get_raw_backtrace () in
+      Log.err (fun m ->
+          m "Unexpected exception from dispatch: %s" (Printexc.to_string exn));
+      Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
+      raise exn
 
 type config = Vif_config.config
 

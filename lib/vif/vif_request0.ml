@@ -9,11 +9,41 @@ type t = {
   ; socket: socket
   ; on_localhost: bool
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
+  ; queries: (string * string list) list
 }
 
 and reqd = Httpcats.Server.reqd
 and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ]
 and request = V1 of H1.Request.t | V2 of H2.Request.t
+
+let accept { request; _ } =
+  let hdrs =
+    match request with
+    | V1 req -> H1.Headers.to_list req.H1.Request.headers
+    | V2 req -> H2.Headers.to_list req.H2.Request.headers
+  in
+  match Vif_headers.get hdrs "accept" with
+  | None -> []
+  | Some str ->
+      let types = String.split_on_char ',' str in
+      let types = List.map String.trim types in
+      let fn str =
+        match String.split_on_char ';' str with
+        | [] -> assert false
+        | [ mime_type; p ] ->
+            let p = String.trim p in
+            let p =
+              if String.starts_with ~prefix:"q=" p then
+                try float_of_string String.(sub p 2 (length p - 2))
+                with _ -> 1.0
+              else 1.0
+            in
+            (String.trim mime_type, p)
+        | mime_type :: _ -> (String.trim mime_type, 1.0)
+      in
+      let types = List.map fn types in
+      let types = List.sort (fun (_, a) (_, b) -> Float.compare b a) types in
+      List.map fst types
 
 let peer { socket; _ } =
   let file_descr =
@@ -57,6 +87,11 @@ let of_reqd socket reqd =
     | `V1 reqd -> (V1 (H1.Reqd.request reqd), `V1 (H1.Reqd.request_body reqd))
     | `V2 reqd -> (V2 (H2.Reqd.request reqd), `V2 (H2.Reqd.request_body reqd))
   in
+  let target =
+    match request with
+    | V1 req -> req.H1.Request.target
+    | V2 req -> req.H2.Request.target
+  in
   let tls =
     match socket with `Tls tls -> Tls_miou_unix.epoch tls | `Tcp _ -> None
   in
@@ -74,12 +109,15 @@ let of_reqd socket reqd =
         inet_addr = Unix.inet_addr_loopback
         || inet_addr = Unix.inet6_addr_loopback
   in
-  { request; tls; reqd; socket; on_localhost; body }
+  let queries = Pct.query_of_target target in
+  { request; tls; reqd; socket; on_localhost; body; queries }
 
 let headers { request; _ } =
   match request with
   | V1 req -> H1.Headers.to_list req.H1.Request.headers
   | V2 req -> H2.Headers.to_list req.H2.Request.headers
+
+let queries { queries; _ } = queries
 
 let meth { request; _ } =
   match request with

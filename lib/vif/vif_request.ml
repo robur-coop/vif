@@ -21,6 +21,7 @@ let version { request; _ } = Vif_request0.version request
 let headers { request; _ } = Vif_request0.headers request
 let reqd { request; _ } = Vif_request0.reqd request
 let source { request; _ } = Vif_request0.source request
+let accept { request; _ } = Vif_request0.accept request
 
 let to_string { request; _ } =
   let src = Vif_request0.source request in
