@@ -5,6 +5,7 @@ module U : sig
   val string : [ `Path | `Query_value ] -> string atom
   val bool : bool atom
   val float : float atom
+  val path : string atom
   val option : 'a atom -> 'a option atom
   val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
 

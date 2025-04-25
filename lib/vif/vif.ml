@@ -11,6 +11,7 @@ module U = struct
     Tyre.(conv prj inj (regex Vif_r.Ext.arbitrary_int))
 
   let string c = Tyre.regex (Vif_r.Ext.string c)
+  let path = Tyre.regex Re.(rep1 any)
 
   let bool =
     let prj = function "true" -> true | _ -> false
