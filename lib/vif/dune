@@ -7,6 +7,9 @@
   json-data-encoding
   multipart_form
   jsonm
+  jsont
+  jsont.bytesrw
+  bytesrw
   cmdliner
   hmap
   fpath

@@ -43,7 +43,6 @@
   $ hurl http://localhost:8080/echo/foo -p=b
   Hello, "foo"!
   
- 
   $ hurl http://localhost:8080/query foo==42 bar==dinosaure -p=b
   foo: 42 ("42")
   

@@ -4,7 +4,7 @@ type multipart_form = Multipart_form
 
 type ('c, 'a) t =
   | Null : (null, unit) t
-  | Json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
+  | Json_encoding : 'a Jsont.t -> (json, 'a) t
   | Multipart_form_encoding : 'a Vif_multipart_form.t -> (multipart_form, 'a) t
   | Multipart_form : (multipart_form, Vif_multipart_form.stream) t
   | Json : (json, Json.t) t

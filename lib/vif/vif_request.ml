@@ -22,13 +22,11 @@ let headers { request; _ } = Vif_request0.headers request
 let reqd { request; _ } = Vif_request0.reqd request
 let source { request; _ } = Vif_request0.source request
 let accept { request; _ } = Vif_request0.accept request
+let close { request; _ } = Vif_request0.close request
 
 let to_string { request; _ } =
   let src = Vif_request0.source request in
   Vif_s.Stream.from src |> Vif_s.Stream.into Vif_s.Sink.string
-
-let destruct : type a. a Json_encoding.encoding -> Json.t -> a =
-  Json_encoding.destruct
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
@@ -44,20 +42,12 @@ let of_json : type a. (Vif_t.json, a) t -> (a, [> `Msg of string ]) result =
   | { encoding= Json_encoding encoding; _ } as req -> begin
       let open Vif_s in
       let from = source req in
-      let res, src = Stream.run ~from ~via:Flow.identity ~into:(Sink.json ()) in
-      Option.iter Source.dispose src;
-      match res with
-      | Error (`Msg msg) as err ->
-          Log.err (fun m -> m "Invalid JSON: %s" msg);
-          err
-      | Ok (json : Json.t) -> begin
-          try Ok (destruct encoding json)
-          with Json_encoding.Cannot_destruct (_, _) ->
-            error_msgf "Invalid JSON value (according to its encoding)"
-        end
-      | exception exn ->
-          Log.err (fun m -> m "Invalid JSON: %s" (Printexc.to_string exn));
-          error_msgf "Invalid JSON value"
+      let reader = Source.to_reader from in
+      match Jsont_bytesrw.decode encoding reader with
+      | Error msg ->
+          Bytesrw.Bytes.Reader.discard reader;
+          Error (`Msg msg)
+      | Ok _ as value -> value
     end
 
 let get : type v. ('cfg, v) Vif_m.t -> ('a, 'c) t -> v option =

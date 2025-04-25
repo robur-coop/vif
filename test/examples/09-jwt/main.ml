@@ -28,15 +28,14 @@ type credential =
 ;;
 
 let credential =
-  let open Json_encoding in
-  let username = req "username" string in
-  let password = req "password" string in
-  let credential = obj2 username password in
-  let prj { username; password } =
-    (username, password) in
-  let inj (username, password) =
-    { username; password } in
-  conv prj inj credential
+  let open Jsont in
+  let username = Object.mem "username" string in
+  let password = Object.mem "password" string in
+  let fn username password = { username; password } in
+  Object.map fn
+  |> username
+  |> password
+  |> Object.finish
 ;;
 
 let form =

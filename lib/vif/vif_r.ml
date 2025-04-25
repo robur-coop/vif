@@ -537,9 +537,7 @@ let prepare_uri uri =
 let rec find_and_trigger : type r.
     original:string -> request -> Re.Group.t -> r re_ex list -> r =
  fun ~original e subs -> function
-  | [] ->
-      (* Invariant: At least one of the regexp of the alternative matches. *)
-      assert false
+  | [] -> raise Not_found
   | ReEx (Request (meth, c), f, id, re_url) :: l ->
       if Re.Mark.test subs id then
         match e.extract meth c with
@@ -562,7 +560,7 @@ let dispatch : type r c.
     | None -> default (Option.get (e.extract None Any)) s
     | Some subs -> (
         try find_and_trigger ~original:s e subs wl
-        with Not_found -> assert false)
+        with Not_found -> default (Option.get (e.extract None Any)) s)
 
 (*
 let dispatch : type r c.

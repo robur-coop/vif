@@ -64,6 +64,7 @@ module Source : sig
   val with_formatter : (Format.formatter -> unit) -> string source
   val with_task : limit:int -> ('a Bqueue.t -> unit) -> 'a source
   val of_bqueue : 'a Bqueue.t -> 'a source
+  val to_reader : string source -> Bytesrw.Bytes.Reader.t
 end
 
 (** {1:sinks Sinks.}

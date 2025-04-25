@@ -76,6 +76,21 @@ module Source = struct
     in
     let stop _bqueue = () in
     Source { init; pull; stop }
+
+  let to_reader (Source { init; pull; _ }) =
+    let src = ref (init ()) in
+    let rec fn () =
+      match pull !src with
+      | Some ("", src') ->
+          src := src';
+          (fn [@tailcall]) ()
+      | Some (str, src') ->
+          src := src';
+          let first = 0 and length = String.length str in
+          Bytesrw.Bytes.Slice.make (Bytes.of_string str) ~first ~length
+      | None -> Bytesrw.Bytes.Slice.eod
+    in
+    Bytesrw.Bytes.Reader.make fn
 end
 
 type ('a, 'r) sink =

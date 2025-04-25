@@ -149,6 +149,7 @@ let source { reqd; _ } =
   to_source reqd
 
 let close { body; _ } =
+  Log.debug (fun m -> m "close the reader body");
   match body with
   | `V1 body -> H1.Body.Reader.close body
   | `V2 body -> H2.Body.Reader.close body

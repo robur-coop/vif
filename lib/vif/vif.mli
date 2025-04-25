@@ -218,7 +218,7 @@ module T : sig
 
   val null : (null, unit) t
   val json : (json, Json.t) t
-  val json_encoding : 'a Json_encoding.encoding -> (json, 'a) t
+  val json_encoding : 'a Jsont.t -> (json, 'a) t
   val m : 'a Multipart_form.t -> (multipart_form, 'a) t
   val multipart_form : (multipart_form, Multipart_form.stream) t
   val any : ('c, string) t
