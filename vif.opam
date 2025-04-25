@@ -13,6 +13,8 @@ depends: [
   "bos"
   "logs"
   "fpath"
+  "bytesrw"
+  "jsont"
   "cmdliner"
   "httpcats"
   "tyre"
