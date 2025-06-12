@@ -9,6 +9,7 @@ license: "BSD-3-clause"
 depends: [
   "ocaml" {>= "5.3.0"}
   "dune" {>= "2.0.0"}
+  "uri"
   "fmt"
   "bos"
   "logs"

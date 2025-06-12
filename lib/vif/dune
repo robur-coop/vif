@@ -4,8 +4,8 @@
  (flags
   (:standard -linkall))
  (libraries
-  json-data-encoding
   multipart_form
+  uri
   jsonm
   jsont
   jsont.bytesrw
