@@ -20,7 +20,6 @@ depends: [
   "tyre"
   "mirage-crypto-rng-miou-unix"
   "jsonm"
-  "json-data-encoding"
   "decompress"
   "conan-unix" {>= "0.0.6"}
   "conan-database"
@@ -42,5 +41,5 @@ pin-depends: [
   [ "miou.dev" "git+https://github.com/robur-coop/miou.git#7a1d4097e93317fd154b8a87752045eef5cefa3a" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#62e2d7f15ec4dc899e577323f252852cd74f3e0a" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#5656d0f33fa093b663525340094e86bcc6a0b025" ]
 ]
