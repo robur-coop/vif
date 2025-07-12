@@ -27,6 +27,7 @@ let%html form = {html|
 let form : Tyxml_html.doc = form ;;
 
 let default req _server cfg =
+  let open Response.Syntax in
   let* () = Response.with_tyxml req form in
   Response.respond `OK
 ;;
@@ -42,19 +43,20 @@ let upload req server cfg =
     | Some "image" ->
         let filename = rand () in
         let filename = Uuidm.to_string filename in
-        S.Stream.to_file filename (S.Stream.from src)
+        Stream.Stream.to_file filename (Stream.Stream.from src)
     | _ ->
-        S.Stream.(drain (from src)) in
+        Stream.Stream.(drain (from src)) in
+  let open Response.Syntax in
   let stream = Result.get_ok (Request.of_multipart_form req) in
-  S.Stream.each fn stream;
+  Stream.Stream.each fn stream;
   let* () = Response.with_string req "ok\n" in
   Response.respond `OK
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ get (rel /?? nil) --> default
   ; post multipart_form (rel / "upload" /?? nil) --> upload ]
 ;;

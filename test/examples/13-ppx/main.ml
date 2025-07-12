@@ -44,6 +44,7 @@ type credential =
 ;;
 
 let login req server cfg =
+  let open Response.Syntax in
   match Vif.Request.of_multipart_form req with
   | Ok { username; password; age } ->
     Logs.debug (fun m -> m "new user %S" username);
@@ -57,6 +58,7 @@ let login req server cfg =
 ;;
 
 let default req _server () =
+  let open Response.Syntax in
   let* () = Response.with_tyxml req form in
   Response.respond `OK
 ;;
@@ -73,9 +75,9 @@ let form =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ get (rel /?? nil) --> default
   ; post (m form) (rel / "login" /?? nil) --> login ]
 ;;

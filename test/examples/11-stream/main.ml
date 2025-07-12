@@ -3,6 +3,7 @@
 open Vif ;;
 
 let cat req server _ =
+  let open Response.Syntax in
   let src = Request.source req in
   let field = "content-type" in
   let* () = Response.add ~field "application/octet-stream" in
@@ -11,9 +12,9 @@ let cat req server _ =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ post any (rel /?? nil) --> cat ]
 ;;
 

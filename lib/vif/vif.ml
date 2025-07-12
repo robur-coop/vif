@@ -3,35 +3,35 @@ let src = Logs.Src.create "vif"
 module Log = (val Logs.src_log src : Logs.LOG)
 module Json = Json
 
-module U = struct
-  include Vif_u
+module Uri = struct
+  include Vif_uri
 
   let int =
     let prj = int_of_string and inj = string_of_int in
-    Tyre.(conv prj inj (regex Vif_r.Ext.arbitrary_int))
+    Tyre.(conv prj inj (regex Vif_route.Ext.arbitrary_int))
 
-  let string c = Tyre.regex (Vif_r.Ext.string c)
+  let string c = Tyre.regex (Vif_route.Ext.string c)
   let path = Tyre.regex Re.(rep1 any)
 
   let bool =
     let prj = function "true" -> true | _ -> false
     and inj x = if x then "true" else "false" in
-    Tyre.(conv prj inj (regex Vif_r.Ext.bool))
+    Tyre.(conv prj inj (regex Vif_route.Ext.bool))
 
   let float =
     let prj = float_of_string and inj = string_of_float in
-    Tyre.(conv prj inj (regex Vif_r.Ext.float))
+    Tyre.(conv prj inj (regex Vif_route.Ext.float))
 
   let option = Tyre.opt
   let conv = Tyre.conv
 end
 
-module R = struct
-  include Vif_r
-  open Vif_t
+module Route = struct
+  include Vif_route
+  open Vif_type
 
-  type ('fu, 'return) t =
-    | Handler : ('f, 'x) Vif_r.req * ('x, 'r) Vif_u.t -> ('f, 'r) t
+  type ('fu, 'return) route =
+    | Handler : ('f, 'x) Vif_route.req * ('x, 'r) Vif_uri.t -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
   let post c t = Handler (Request (Some `POST, c), t)
@@ -39,62 +39,66 @@ module R = struct
   let ( --> ) = route
 end
 
-module C = Vif_c
-module D = Vif_d
-module G = Vif_g
-module M = Vif_m
-module Q = Vif_q
+module Client = Vif_client
+module Device = Vif_device
+module Server = Vif_server
+module Middleware = Vif_middleware
+module Queries = Vif_queries
 
-module Ds = struct
+module Devices = struct
   type 'value t =
     | [] : 'value t
-    | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
+    | ( :: ) : ('value, 'a) Device.device * 'value t -> 'value t
 
-  let run : Vif_d.Hmap.t -> 'value t -> 'value -> Vif_d.Hmap.t =
+  let run : Vif_device.Hmap.t -> 'value t -> 'value -> Vif_device.Hmap.t =
    fun t lst user's_value ->
     let rec go t = function
       | [] -> t
-      | x :: r -> go (Vif_d.run t user's_value x) r
+      | x :: r -> go (Vif_device.run t user's_value x) r
     in
     go t lst
 
-  let finally : Vif_d.t -> unit =
+  let finally : Vif_device.t -> unit =
    fun t ->
-    let[@warning "-8"] (Vif_d.Devices m) = t in
-    let fn (Vif_d.Hmap.B (k, v)) =
-      let { Vif_d.Device.finally; _ } = Vif_d.Hmap.Key.info k in
+    let[@warning "-8"] (Vif_device.Devices m) = t in
+    let fn (Vif_device.Hmap.B (k, v)) =
+      let { Vif_device.Device.finally; _ } = Vif_device.Hmap.Key.info k in
       finally v
     in
-    Vif_d.Hmap.iter fn m
+    Vif_device.Hmap.iter fn m
 end
 
-module Ms = struct
-  type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) Vif_m.t * 'cfg t -> 'cfg t
-  type ('cfg, 'v) fn = ('cfg, 'v) Vif_m.fn
+module Middlewares = struct
+  type 'cfg t =
+    | [] : 'cfg t
+    | ( :: ) : ('cfg, 'a) Vif_middleware.t * 'cfg t -> 'cfg t
 
-  let make = Vif_m.make
+  type ('cfg, 'v) fn = ('cfg, 'v) Vif_middleware.fn
+
+  let make = Vif_middleware.make
 
   type ('value, 'a, 'c) ctx = {
-      server: Vif_g.t
+      server: Vif_server.t
     ; request: Vif_request0.t
     ; target: string
     ; user's_value: 'value
   }
 
-  let rec run : type v. v t -> (v, 'a, 'c) ctx -> Vif_m.Hmap.t -> Vif_m.Hmap.t =
+  let rec run : type v.
+      v t -> (v, 'a, 'c) ctx -> Vif_middleware.Hmap.t -> Vif_middleware.Hmap.t =
    fun lst ctx env ->
     match lst with
     | [] -> env
     | Middleware (fn, key) :: r -> begin
         match fn ctx.request ctx.target ctx.server ctx.user's_value with
-        | Some value -> run r ctx (Vif_m.Hmap.add key value env)
+        | Some value -> run r ctx (Vif_middleware.Hmap.add key value env)
         | None -> run r ctx env
         | exception _exn -> run r ctx env
       end
 end
 
-module T = Vif_t
-module S = Vif_s
+module Type = Vif_type
+module Stream = Vif_stream
 module Method = Vif_method
 module Status = Vif_status
 module Headers = Vif_headers
@@ -119,7 +123,7 @@ module Response = struct
       respond `Not_modified
     else
       let mime = Option.value ~default:(mime_type path) mime in
-      let src = Vif_s.Source.file (Fpath.to_string path) in
+      let src = Vif_stream.Source.file (Fpath.to_string path) in
       let field = "connection" in
       let* () =
         if Vif_request.version req = 1 then add ~field "close" else return ()
@@ -135,17 +139,22 @@ module Response = struct
       let* () = add ~field (Vif_handler.sha256sum path) in
       let* () = with_source req src in
       respond `OK
+
+  type nonrec empty = empty = Empty
+  type nonrec filled = filled = Filled
+  type nonrec sent = sent = Sent
+
+  module Infix = struct
+    let ( >>= ) = bind
+  end
+
+  module Syntax = struct
+    let ( let* ) = bind
+  end
 end
 
 module Cookie = Vif_cookie
 module Handler = Vif_handler
-
-type e = Response.e = Empty
-type f = Response.f = Filled
-type s = Response.s = Sent
-
-let ( let* ) = Response.bind
-let return = Response.return
 
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
@@ -164,14 +173,14 @@ let content_type req0 =
 
 let recognize_request ~env req0 =
   let extract : type c a.
-      Vif_method.t option -> (c, a) Vif_t.t -> (c, a) Vif_request.t option =
+      Vif_method.t option -> (c, a) Vif_type.t -> (c, a) Vif_request.t option =
    fun meth c ->
     let none = true in
     let some = ( = ) (Vif_request0.meth req0) in
     let meth_match = Option.fold ~none ~some meth in
     Log.debug (fun m -> m "method matches? %b" meth_match);
     match c with
-    | Vif_t.Any as encoding ->
+    | Vif_type.Any as encoding ->
         if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
     | Null as encoding ->
@@ -206,10 +215,10 @@ let recognize_request ~env req0 =
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
   in
-  { Vif_r.extract }
+  { Vif_route.extract }
 
 module Multipart_form = struct
-  open Vif_s
+  open Vif_stream
 
   type 'id multipart_form_context = { queue: event Queue.t; parse: int parse }
   and event = [ `Id of Multipart_form.Header.t * string Bqueue.t ]
@@ -374,7 +383,7 @@ module Request = struct
   include Vif_request
 
   let of_multipart_form : type a.
-         (Vif_t.multipart_form, a) Vif_request.t
+         (Vif_type.multipart_form, a) Vif_request.t
       -> (a, [> `Invalid_multipart_form | `Not_found of string ]) result =
     function
     | { encoding= Multipart_form_encoding r; _ } as req ->
@@ -399,20 +408,21 @@ type 'value daemon = {
   ; orphans: unit Miou.orphans
   ; condition: Miou.Condition.t
   ; user's_value: 'value
-  ; server: Vif_g.t
+  ; server: Vif_server.t
 }
 
 and 'value user's_function =
   | User's_task : Vif_request0.t * 'value fn -> 'value user's_function
 
-and 'value fn = Vif_g.t -> 'value -> (e, s, unit) Vif_response.t
+and 'value fn =
+  Vif_server.t -> 'value -> (Response.empty, Response.sent, unit) Vif_response.t
 
 let to_ctx daemon req0 =
   {
-    Ms.server= daemon.server
-  ; Ms.request= req0
-  ; Ms.target= Vif_request0.target req0
-  ; Ms.user's_value= daemon.user's_value
+    Middlewares.server= daemon.server
+  ; Middlewares.request= req0
+  ; Middlewares.target= Vif_request0.target req0
+  ; Middlewares.user's_value= daemon.user's_value
   }
 
 let rec clean_up orphans =
@@ -461,11 +471,11 @@ let rec user's_functions daemon =
 
 let handler ~default ~middlewares routes daemon =
   ();
-  let dispatch = R.dispatch ~default routes in
+  let dispatch = Route.dispatch ~default routes in
   fun socket reqd ->
     let req0 = Vif_request0.of_reqd socket reqd in
     let ctx = to_ctx daemon req0 in
-    let env = Ms.run middlewares ctx Vif_m.Hmap.empty in
+    let env = Middlewares.run middlewares ctx Vif_middleware.Hmap.empty in
     let request = recognize_request ~env req0 in
     let target = Vif_request0.target req0 in
     try
@@ -556,6 +566,7 @@ let default req target _server _user's_value =
   in
   let len = String.length str in
   let field = "content-type" in
+  let open Response.Syntax in
   let* () = Vif_response.add ~field "text/plain; charset=utf-8" in
   let field = "content-length" in
   let* () = Vif_response.add ~field (string_of_int len) in
@@ -572,8 +583,8 @@ let default_from_handlers handlers req target server user's_value =
   | Some p -> p
   | None -> default req target server user's_value
 
-let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
-    ?(middlewares = Ms.[]) ?(handlers = []) routes user's_value =
+let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
+    ?(middlewares = Middlewares.[]) ?(handlers = []) routes user's_value =
   let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
@@ -593,9 +604,9 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
     | false -> None
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
-  let devices = Ds.run Vif_d.Hmap.empty devices user's_value in
+  let devices = Devices.run Vif_device.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
-  let server = { Vif_g.devices; cookie_key= cfg.Vif_config.cookie_key } in
+  let server = { Vif_server.devices; cookie_key= cfg.Vif_config.cookie_key } in
   let default = default_from_handlers handlers in
   let fn0 = handler ~default ~middlewares routes in
   let rd0 = Miou.Computation.create () in
@@ -622,7 +633,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Ds.[])
   Miou.await_exn prm0;
   Miou.await_exn prm1;
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
-  Ds.finally (Vif_d.Devices devices);
+  Devices.finally (Vif_device.Devices devices);
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options.setup_config

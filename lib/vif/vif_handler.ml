@@ -1,9 +1,9 @@
 type ('c, 'value) t =
      ('c, string) Vif_request.t
   -> string
-  -> Vif_g.t
+  -> Vif_server.t
   -> 'value
-  -> (Vif_response.e, Vif_response.s, unit) Vif_response.t option
+  -> (Vif_response.empty, Vif_response.sent, unit) Vif_response.t option
 
 let pwd = Fpath.v (Unix.getcwd ())
 let tree = Conan_light.tree
@@ -67,7 +67,7 @@ let static ?(top = pwd) req target _server _ =
           let* () = Vif_response.with_string req "" in
           Vif_response.respond `Not_modified
         else
-          let src = Vif_s.Source.file (Fpath.to_string abs_path) in
+          let src = Vif_stream.Source.file (Fpath.to_string abs_path) in
           let field = "content-type" in
           let* () = Vif_response.add ~field (mime_type abs_path) in
           let stat = Unix.stat (Fpath.to_string abs_path) in

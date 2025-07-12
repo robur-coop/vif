@@ -3,6 +3,7 @@
 open Vif ;;
 
 let default req _server () =
+  let open Response.Syntax in
   let str = "Hello World!\n" in
   let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
   let* () = Response.with_string req str in
@@ -10,9 +11,9 @@ let default req _server () =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ get (rel /?? nil) --> default ]
 ;;
 

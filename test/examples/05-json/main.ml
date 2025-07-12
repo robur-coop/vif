@@ -26,6 +26,7 @@ let foo =
 open Vif ;;
 
 let deserialize req _server () =
+  let open Vif.Response.Syntax in
   match Vif.Request.of_json req with
   | Ok (foo : foo) ->
       let str =
@@ -47,9 +48,9 @@ let deserialize req _server () =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ post (json_encoding foo) (rel /?? nil) --> deserialize ]
 ;;
 

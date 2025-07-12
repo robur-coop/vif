@@ -2,14 +2,14 @@ let src = Logs.Src.create "vif.response"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type e = Empty
-and f = Filled
-and s = Sent
+type empty = Empty
+and filled = Filled
+and sent = Sent
 
 type 'a state =
-  | Empty : e state
-  | Filled : string Vif_s.source -> f state
-  | Sent : s state
+  | Empty : empty state
+  | Filled : string Vif_stream.source -> filled state
+  | Sent : sent state
 
 let empty = Empty
 let filled from = Filled from
@@ -22,9 +22,9 @@ type ('p, 'q, 'a) t =
   | Rem_header : string -> ('p, 'p, unit) t
   | Return : 'a -> ('p, 'p, 'a) t
   | Bind : ('p, 'q, 'a) t * ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
-  | Source : string Vif_s.source -> (e, f, unit) t
-  | String : string -> (e, f, unit) t
-  | Respond : Vif_status.t -> (f, s, unit) t
+  | Source : string Vif_stream.source -> (empty, filled, unit) t
+  | String : string -> (empty, filled, unit) t
+  | Respond : Vif_status.t -> (filled, sent, unit) t
 
 let bind x fn = Bind (x, fn)
 let respond status = Respond status
@@ -102,7 +102,7 @@ let with_tyxml ?compression:alg req tyxml =
   let* _ = add_unless_exists ~field v in
   let* _ = add_unless_exists ~field:"connection" "close" in
   let source =
-    Vif_s.Source.with_formatter @@ fun ppf ->
+    Vif_stream.Source.with_formatter @@ fun ppf ->
     Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
   in
   Source source
@@ -133,7 +133,7 @@ let response ?headers:(hdrs = []) status req0 =
         Log.debug (fun m -> m "<- close the response body");
         H1.Body.Writer.close body
       in
-      (Sink { init; push; full; stop } : (string, unit) Vif_s.sink)
+      (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
   | `V2 reqd ->
       let hdrs = H2.Headers.of_list hdrs in
       let resp = H2.Response.create ~headers:hdrs status in
@@ -144,7 +144,7 @@ let response ?headers:(hdrs = []) status req0 =
       in
       let full _ = false in
       let stop = H2.Body.Writer.close in
-      (Sink { init; push; full; stop } : (string, unit) Vif_s.sink)
+      (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
 
 let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
  fun req s t ->
@@ -176,7 +176,7 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
     | Empty, String str ->
         if Vif_request0.version req = 1 then
           headers := Vif_headers.add_unless_exists !headers "connection" "close";
-        (Filled (Vif_s.Source.list [ str ]), ())
+        (Filled (Vif_stream.Source.list [ str ]), ())
     | Filled from, Respond status ->
         let headers = !headers in
         let headers, via =
@@ -187,20 +187,20 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, Vif_s.Flow.deflate ())
+              (headers, Vif_stream.Flow.deflate ())
           | Some "gzip" ->
               let headers = Vif_headers.rem headers "content-length" in
               let headers =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, Vif_s.Flow.gzip ())
-          | _ -> (headers, Vif_s.Flow.identity)
+              (headers, Vif_stream.Flow.gzip ())
+          | _ -> (headers, Vif_stream.Flow.identity)
         in
         let into = response ~headers status req in
         Log.debug (fun m -> m "run our stream to send a response");
-        let (), src = Vif_s.Stream.run ~from ~via ~into in
-        Option.iter Vif_s.Source.dispose src;
+        let (), src = Vif_stream.Stream.run ~from ~via ~into in
+        Option.iter Vif_stream.Source.dispose src;
         (Sent, ())
   in
   go s t

@@ -4,7 +4,7 @@
 open Vif ;;
 
 let sha1 =
-  let open S in
+  let open Stream in
   let init () = Digestif.SHA1.empty in
   let push ctx str = Digestif.SHA1.feed_string ctx str in
   let full = Fun.const false in
@@ -14,8 +14,9 @@ let sha1 =
 
 let default req server () =
   let from = Request.source req in
-  let hash, src = S.Stream.run ~from ~via:S.Flow.identity ~into:sha1 in
-  Option.iter S.Source.dispose src;
+  let hash, src = Stream.Stream.run ~from ~via:Stream.Flow.identity ~into:sha1 in
+  Option.iter Stream.Source.dispose src;
+  let open Response.Syntax in
   let field = "content-type" in
   let* () = Response.add ~field "text/plain; charset=utf-8" in
   let* () = Response.with_string req (Digestif.SHA1.to_hex hash) in
@@ -23,9 +24,9 @@ let default req server () =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ post any (rel /?? nil) --> default ]
 
 let () = Miou_unix.run @@ fun () ->

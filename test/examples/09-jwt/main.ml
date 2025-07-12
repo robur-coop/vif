@@ -11,7 +11,7 @@ type cfg =
   { secret : string }
 ;;
 
-let jwt = Vif.Ms.make ~name:"jwt" @@ fun req target server { secret } ->
+let jwt = Vif.Middlewares.make ~name:"jwt" @@ fun req target server { secret } ->
   Logs.debug (fun m -> m "Search vif-token cookie");
   match Cookie.get server req ~name:"vif-token" with
   | Error err -> None
@@ -53,6 +53,7 @@ let users =
 ;;
 
 let login req server { secret } { username; password } =
+  let open Response.Syntax in
   match List.assoc_opt username users with
   | Some p' when password = p' ->
       let token = Jwto.encode HS512 secret [ "username", username ] in
@@ -69,6 +70,7 @@ let login req server { secret } { username; password } =
       Response.respond `Unauthorized
 
 let login_by_json req server cfg =
+  let open Response.Syntax in
   match Vif.Request.of_json req with
   | Ok credential -> login req server cfg credential
   | Error _ ->
@@ -79,6 +81,7 @@ let login_by_json req server cfg =
 ;;
 
 let login_by_form req server cfg =
+  let open Response.Syntax in
   match Vif.Request.of_multipart_form req with
   | Ok credential -> login req server cfg credential
   | Error _ ->
@@ -89,6 +92,7 @@ let login_by_form req server cfg =
 ;;
 
 let default req server _cfg =
+  let open Response.Syntax in
   match Request.get jwt req with
   | None ->
       let field = "content-type" in
@@ -104,9 +108,9 @@ let default req server _cfg =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
   [ post (m form) (rel / "login" /?? nil) --> login_by_form
   ; post (json_encoding credential) (rel / "login" /?? nil) --> login_by_json
   ; get (rel /?? nil) --> default ]
@@ -114,5 +118,5 @@ let routes =
 
 let () = Miou_unix.run @@ fun () ->
   let secret = "deadbeef" in
-  Vif.run ~middlewares:Ms.[ jwt ] routes { secret }
+  Vif.run ~middlewares:Middlewares.[ jwt ] routes { secret }
 ;;

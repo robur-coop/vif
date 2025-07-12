@@ -48,7 +48,7 @@ let pp_meta ppf t =
   | _ -> Fmt.pf ppf "<unknown-part>"
 
 type raw = ((meta * Vif_headers.t) * string) list
-type stream = (meta * string Vif_s.source) Vif_s.stream
+type stream = (meta * string Vif_stream.source) Vif_stream.stream
 
 module Fields_folder (Acc : sig
   type ('a, 'b) t
