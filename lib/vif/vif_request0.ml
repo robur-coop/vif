@@ -57,15 +57,15 @@ let peer { socket; _ } =
   | Unix.ADDR_UNIX v -> Fmt.str "<%s>" v
 
 let to_source ~schedule ~close body =
-  Vif_s.Source.with_task ~limit:0x100 @@ fun bqueue ->
+  Vif_stream.Source.with_task ~limit:0x100 @@ fun bqueue ->
   let rec on_eof () =
     close body;
-    Vif_s.Bqueue.close bqueue;
+    Vif_stream.Bqueue.close bqueue;
     Log.debug (fun m -> m "-> request body closed")
   and on_read bstr ~off ~len =
     let str = Bigstringaf.substring bstr ~off ~len in
     Log.debug (fun m -> m "-> + %d byte(s)" (String.length str));
-    Vif_s.Bqueue.put bqueue str;
+    Vif_stream.Bqueue.put bqueue str;
     schedule body ~on_eof ~on_read
   in
   Log.debug (fun m -> m "schedule a reader");

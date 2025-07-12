@@ -20,4 +20,4 @@ let request ?config ?tls_config ?authenticator ?meth ?headers ?body:_
     | Ok (_response, ()) -> ()
     | Error (#Httpcats.error as err) -> raise (Client_error err)
   in
-  Vif_u.keval t fn
+  Vif_uri.keval t fn

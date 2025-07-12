@@ -61,7 +61,7 @@ let const v = Const v
 let value (Device (_, _, key)) = Value key
 let map args fn = Map (args, fn)
 
-let device : type v f r.
+let v : type v f r.
     name:string -> finally:(r -> unit) -> (v, f, r) args -> f -> (v, r) device =
  fun ~name ~finally args fn ->
   let key : r Hmap.key = Hmap.Key.create { name; finally } in
