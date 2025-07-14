@@ -159,15 +159,7 @@ let load cfg str =
   Log.debug (fun m -> m "load: @[<hov>%a@]" Fmt.(Dump.list string) artifacts);
   Ok artifacts
 
-let null =
-  Format.formatter_of_out_functions
-    {
-      Format.out_string= (fun _ _ _ -> ())
-    ; out_flush= ignore
-    ; out_newline= ignore
-    ; out_spaces= ignore
-    ; out_indent= ignore
-    }
+let null = Format.make_formatter (fun _ _ _ -> ()) ignore
 
 let load cfg str =
   match load cfg str with
