@@ -248,12 +248,13 @@ module Request : sig
 
   (** {3:request-middleware Requests for middlewares}
 
-      As soon as it comes to executing the various middlewares ({!type:M.t})
-      defined by the user, the latter can manipulate the HTTP request given by
-      the client. However, the latter has a limitation: the body of the request
-      {b cannot} be obtained from the {!type:request} type of value. Indeed,
-      middlewares should not manipulate the body of requests and should only
-      refer to meta-data (such as {{!val:headers_of_request} headers}). *)
+      As soon as it comes to executing the various middlewares
+      ({!type:Middleware.t}) defined by the user, the latter can manipulate the
+      HTTP request given by the client. However, the latter has a limitation:
+      the body of the request {b cannot} be obtained from the {!type:request}
+      type of value. Indeed, middlewares should not manipulate the body of
+      requests and should only refer to meta-data (such as
+      {{!val:headers_of_request} headers}). *)
 
   type request
 
@@ -280,7 +281,7 @@ module Route : sig
 end
 
 module Client : sig
-  (** Module [C] implements the {b c}lient part of the HTTP protocol. *)
+  (** Module [Client] implements the {b c}lient part of the HTTP protocol. *)
 
   type body
   type response
@@ -306,11 +307,9 @@ module Client : sig
   (** {3:example-client Examples.}
 
       {[
-        open Vif
-
         (* https://raw.githubusercontent.com/<org>/<repository>/refs/heads/<branch>/README.md *)
         let readme =
-          let open U in
+          let open Vif.Uri in
           host "raw.githubusercontent.com"
           /% string
           /% string
@@ -321,7 +320,7 @@ module Client : sig
           /?? nil
 
         let get_readme ?(branch = "main") ~org ~repository () =
-          C.request ~meth:`GET readme org repository branch
+          Vif.Client.request ~meth:`GET readme org repository branch
       ]} *)
 end
 
@@ -467,11 +466,11 @@ end
 module Response : sig
   (** {3 Response.}
 
-      A response is a construction (monad) whose initial state is {i empty}
-      ({!type:e}) and must end in the state {i sent} ({!type:s}). Throughout
-      this construction, the user can {!val:add}/{!val:rem}/{!val:set}
-      information in the {i header}. Finally, the user must respond with content
-      (via {!val:with_string}/{!val:with_stream}) and a status code. *)
+      A response is a construction (monad) whose initial state is {!type:empty}
+      and must end in the state {!type:sent}. Throughout this construction, the
+      user can {!val:add}/{!val:rem}/{!val:set} information in the {i header}.
+      Finally, the user must respond with content (via
+      {!val:with_string}/{!val:with_stream}) and a status code. *)
 
   type ('p, 'q, 'a) t
   type empty
@@ -544,15 +543,16 @@ module Cookie : sig
 
       {[
         let hello req server _ =
-          let value = Cookie.get ~name:"my-cookie" server req in
+          let open Vif.Response.Syntax in
+          let value = Vif.Cookie.get ~name:"my-cookie" server req in
           match value with
           | "ping" ->
-              let* () = Cookie.set ~name:"my-cookie" server req "pong" in
-              Response.respond `OK
+              let* () = Vif.Cookie.set ~name:"my-cookie" server req "pong" in
+              Vif.Response.respond `OK
           | "pong" ->
-              let* () = Cookie.set ~name:"my-cookie" server req "ping" in
-              Response.respond `OK
-          | _ -> Response.respond `OK
+              let* () = Vif.Cookie.set ~name:"my-cookie" server req "ping" in
+              Vif.Response.respond `OK
+          | _ -> Vif.Response.respond `OK
       ]} *)
 
   type config
