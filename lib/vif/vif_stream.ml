@@ -40,15 +40,8 @@ module Source = struct
 
   let with_formatter fn =
     let bqueue = Bqueue.create 0x100 in
-    let out_string str off len = Bqueue.put bqueue (String.sub str off len) in
-    let out_flush () = () in
-    let out_newline () = Bqueue.put bqueue "\n" in
-    let out_spaces len = Bqueue.put bqueue (String.make len ' ') in
-    let out_indent len = Bqueue.put bqueue (String.make len '\t') in
-    let ppf =
-      Format.formatter_of_out_functions
-        { Format.out_string; out_flush; out_newline; out_spaces; out_indent }
-    in
+    let out str off len = Bqueue.put bqueue (String.sub str off len) in
+    let ppf = Format.make_formatter out ignore in
     let init () = Miou.async @@ fun () -> fn ppf; Bqueue.close bqueue in
     let pull prm =
       match Bqueue.get bqueue with

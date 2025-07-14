@@ -1,4 +1,4 @@
-module U : sig
+module Uri : sig
   type 'a atom = 'a Tyre.t
 
   val int : int atom
@@ -32,7 +32,7 @@ module U : sig
 end
 
 module Json = Json
-module S = Vif_s
+module Stream = Vif_stream
 
 module Headers : sig
   type t = (string * string) list
@@ -169,7 +169,7 @@ module Multipart_form : sig
   val size : part -> int option
   (** [size part] is the size of the part in bytes. *)
 
-  type stream = (part * string S.source) S.stream
+  type stream = (part * string Stream.source) Stream.stream
   (** Type of a [multipart-form/data] stream.
 
       It may be necessary to save part of a form as a file rather than storing
@@ -202,7 +202,7 @@ module Multipart_form : sig
       with. *)
 end
 
-module T : sig
+module Type : sig
   (** {3:type-of-requests Type of requests.}
 
       Vif is able to dispatch requests not only by the route but also by the
@@ -225,7 +225,7 @@ module T : sig
   val any : ('c, string) t
 end
 
-module M : sig
+module Middleware : sig
   type ('cfg, 'v) t
 end
 
@@ -237,23 +237,24 @@ module Request : sig
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
   val accept : ('c, 'a) t -> string list
-  val of_json : (T.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val of_json : (Type.json, 'a) t -> ('a, [ `Msg of string ]) result
 
   val of_multipart_form :
-       (T.multipart_form, 'a) t
+       (Type.multipart_form, 'a) t
     -> ('a, [ `Not_found of string | `Invalid_multipart_form ]) result
 
-  val source : ('c, 'a) t -> string S.source
-  val get : ('cfg, 'v) M.t -> ('c, 'a) t -> 'v option
+  val source : ('c, 'a) t -> string Stream.source
+  val get : ('cfg, 'v) Middleware.t -> ('c, 'a) t -> 'v option
 
   (** {3:request-middleware Requests for middlewares}
 
-      As soon as it comes to executing the various middlewares ({!type:M.t})
-      defined by the user, the latter can manipulate the HTTP request given by
-      the client. However, the latter has a limitation: the body of the request
-      {b cannot} be obtained from the {!type:request} type of value. Indeed,
-      middlewares should not manipulate the body of requests and should only
-      refer to meta-data (such as {{!val:headers_of_request} headers}). *)
+      As soon as it comes to executing the various middlewares
+      ({!type:Middleware.t}) defined by the user, the latter can manipulate the
+      HTTP request given by the client. However, the latter has a limitation:
+      the body of the request {b cannot} be obtained from the {!type:request}
+      type of value. Indeed, middlewares should not manipulate the body of
+      requests and should only refer to meta-data (such as
+      {{!val:headers_of_request} headers}). *)
 
   type request
 
@@ -262,22 +263,25 @@ module Request : sig
   val target_of_request : request -> string
 end
 
-module Q : sig
+module Queries : sig
   val exists : ('c, 'a) Request.t -> string -> bool
   val get : ('c, 'a) Request.t -> string -> string list
 end
 
-module R : sig
-  type 'r route
-  type ('fu, 'return) t
+module Route : sig
+  type 'r t
+  type ('fu, 'return) route
 
-  val get : ('x, 'r) U.t -> ((T.null, unit) Request.t -> 'x, 'r) t
-  val post : ('c, 'a) T.t -> ('x, 'r) U.t -> (('c, 'a) Request.t -> 'x, 'r) t
-  val ( --> ) : ('f, 'r) t -> 'f -> 'r route
+  val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+
+  val post :
+    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+
+  val ( --> ) : ('f, 'r) route -> 'f -> 'r t
 end
 
-module C : sig
-  (** Module [C] implements the {b c}lient part of the HTTP protocol. *)
+module Client : sig
+  (** Module [Client] implements the {b c}lient part of the HTTP protocol. *)
 
   type body
   type response
@@ -297,17 +301,15 @@ module C : sig
     -> ?max_redirect:int
     -> ?follow_redirect:bool
     -> ?resolver:resolver
-    -> ('a, response) U.t
+    -> ('a, response) Uri.t
     -> 'a
 
   (** {3:example-client Examples.}
 
       {[
-        open Vif
-
         (* https://raw.githubusercontent.com/<org>/<repository>/refs/heads/<branch>/README.md *)
         let readme =
-          let open U in
+          let open Vif.Uri in
           host "raw.githubusercontent.com"
           /% string
           /% string
@@ -318,17 +320,17 @@ module C : sig
           /?? nil
 
         let get_readme ?(branch = "main") ~org ~repository () =
-          C.request ~meth:`GET readme org repository branch
+          Vif.Client.request ~meth:`GET readme org repository branch
       ]} *)
 end
 
-module D : sig
+module Device : sig
   (** {3 Devices.}
 
       A device is a global instance on the http server with which a "finaliser"
-      is associated. A device is available from all requests from a {!type:G.t}
-      value. The same device instance is available from all domains —
-      interactions with a device must therefore be {i domain-safe}.
+      is associated. A device is available from all requests from a
+      {!type:Server.t} value. The same device instance is available from all
+      domains — interactions with a device must therefore be {i domain-safe}.
 
       A device can be created from several values as well as from other devices.
       Finally, a device is constructed from an end-user value specified by
@@ -349,7 +351,7 @@ module D : sig
   val const : 'a -> ('value, 'a) arg
   val map : ('value, 'f, 'r) args -> 'f -> ('value, 'r) arg
 
-  val device :
+  val v :
        name:string
     -> finally:('r -> unit)
     -> ('v, 'f, 'r) args
@@ -357,22 +359,22 @@ module D : sig
     -> ('v, 'r) device
 end
 
-module Ds : sig
+module Devices : sig
   type 'value t =
     | [] : 'value t
-    | ( :: ) : ('value, 'a) D.device * 'value t -> 'value t
+    | ( :: ) : ('value, 'a) Device.device * 'value t -> 'value t
 end
 
-module G : sig
+module Server : sig
   type t
 
-  val device : ('value, 'a) D.device -> t -> 'a
+  val device : ('value, 'a) Device.device -> t -> 'a
   (* [device w t] returns the device specified by the [w] parameter and the
      server [t]. If the latter has not been initialized via the {!val:Vif.run}
      function, the function raises an exception [Not_found]. *)
 end
 
-module Ms : sig
+module Middlewares : sig
   (** {3:middlewares Middlewares.}
 
       Middleware is a function {!type:fn} that applies to all requests. The user
@@ -382,10 +384,14 @@ module Ms : sig
       retrieved from the handlers associated with the routes via
       {!val:Request.get}. *)
 
-  type 'cfg t = [] : 'cfg t | ( :: ) : ('cfg, 'a) M.t * 'cfg t -> 'cfg t
-  type ('cfg, 'v) fn = Request.request -> string -> G.t -> 'cfg -> 'v option
+  type 'cfg t =
+    | [] : 'cfg t
+    | ( :: ) : ('cfg, 'a) Middleware.t * 'cfg t -> 'cfg t
 
-  val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) M.t
+  type ('cfg, 'v) fn =
+    Request.request -> string -> Server.t -> 'cfg -> 'v option
+
+  val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) Middleware.t
   (** [make ~name fn] creates a new {i middleware} which can be used by the
       server (you must specify the {i witness} returned by this function into
       {!val:run}). *)
@@ -460,43 +466,43 @@ end
 module Response : sig
   (** {3 Response.}
 
-      A response is a construction (monad) whose initial state is {i empty}
-      ({!type:e}) and must end in the state {i sent} ({!type:s}). Throughout
-      this construction, the user can {!val:add}/{!val:rem}/{!val:set}
-      information in the {i header}. Finally, the user must respond with content
-      (via {!val:with_string}/{!val:with_stream}) and a status code. *)
+      A response is a construction (monad) whose initial state is {!type:empty}
+      and must end in the state {!type:sent}. Throughout this construction, the
+      user can {!val:add}/{!val:rem}/{!val:set} information in the {i header}.
+      Finally, the user must respond with content (via
+      {!val:with_string}/{!val:with_stream}) and a status code. *)
 
   type ('p, 'q, 'a) t
-  type e
-  type f
-  type s
+  type empty
+  type filled
+  type sent
 
   val with_source :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
-    -> string S.source
-    -> (e, f, unit) t
+    -> string Stream.source
+    -> (empty, filled, unit) t
 
   val with_string :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
     -> string
-    -> (e, f, unit) t
+    -> (empty, filled, unit) t
 
   val with_file :
        ?mime:string
     -> ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
     -> Fpath.t
-    -> (e, s, unit) t
+    -> (empty, sent, unit) t
 
   val with_tyxml :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
     -> Tyxml.Html.doc
-    -> (e, f, unit) t
+    -> (empty, filled, unit) t
 
-  val respond : Status.t -> (f, s, unit) t
+  val respond : Status.t -> (filled, sent, unit) t
   (** [respond status] responds to the client with the given [status] and with
       the {i already filled} body response. *)
 
@@ -516,6 +522,16 @@ module Response : sig
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
   (** [add_unless_exists ~field value] adds a new [field] with the given [value]
       into the futur response only if the given [field] does not exists yet. *)
+
+  val return : 'a -> ('p, 'p, 'a) t
+
+  module Infix : sig
+    val ( >>= ) : ('p, 'q, 'a) t -> ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
+  end
+
+  module Syntax : sig
+    val ( let* ) : ('p, 'q, 'a) t -> ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
+  end
 end
 
 module Cookie : sig
@@ -527,15 +543,16 @@ module Cookie : sig
 
       {[
         let hello req server _ =
-          let value = Cookie.get ~name:"my-cookie" server req in
+          let open Vif.Response.Syntax in
+          let value = Vif.Cookie.get ~name:"my-cookie" server req in
           match value with
           | "ping" ->
-              let* () = Cookie.set ~name:"my-cookie" server req "pong" in
-              Response.respond `OK
+              let* () = Vif.Cookie.set ~name:"my-cookie" server req "pong" in
+              Vif.Response.respond `OK
           | "pong" ->
-              let* () = Cookie.set ~name:"my-cookie" server req "ping" in
-              Response.respond `OK
-          | _ -> Response.respond `OK
+              let* () = Vif.Cookie.set ~name:"my-cookie" server req "ping" in
+              Vif.Response.respond `OK
+          | _ -> Vif.Response.respond `OK
       ]} *)
 
   type config
@@ -556,7 +573,7 @@ module Cookie : sig
   val get :
        ?encrypted:bool
     -> name:string
-    -> G.t
+    -> Server.t
     -> Request.request
     -> (string, [> error ]) result
   (** [get ?encrypted ~name server req] returns the value associated to the key
@@ -569,7 +586,7 @@ module Cookie : sig
     -> ?cfg:config
     -> ?path:string
     -> name:string
-    -> G.t
+    -> Server.t
     -> ('c, 'a) Request.t
     -> string
     -> ('p, 'p, unit) Response.t
@@ -579,24 +596,14 @@ module Handler : sig
   type ('c, 'value) t =
        ('c, string) Request.t
     -> string
-    -> G.t
+    -> Server.t
     -> 'value
-    -> (Response.e, Response.s, unit) Response.t option
+    -> (Response.empty, Response.sent, unit) Response.t option
 
   val static : ?top:Fpath.t -> ('c, 'value) t
 end
 
 type config
-type e = Response.e
-type f = Response.f
-type s = Response.s
-
-val ( let* ) :
-     ('p, 'q, 'a) Response.t
-  -> ('a -> ('q, 'r, 'b) Response.t)
-  -> ('p, 'r, 'b) Response.t
-
-val return : 'a -> ('p, 'p, 'a) Response.t
 
 val config :
      ?domains:int
@@ -613,10 +620,12 @@ val config :
 
 val run :
      ?cfg:config
-  -> ?devices:'value Ds.t
-  -> ?middlewares:'value Ms.t
+  -> ?devices:'value Devices.t
+  -> ?middlewares:'value Middlewares.t
   -> ?handlers:('c, 'value) Handler.t list
-  -> (G.t -> 'value -> (e, s, unit) Response.t) R.route list
+  -> (Server.t -> 'value -> (Response.empty, Response.sent, unit) Response.t)
+     Route.t
+     list
   -> 'value
   -> unit
 

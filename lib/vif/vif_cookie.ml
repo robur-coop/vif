@@ -55,7 +55,7 @@ let get ?(encrypted = true) ~name server req0 =
       let nonce = String.sub value 1 12 in
       let adata = "vif.cookie-" ^ name in
       let vdata = String.sub value 13 (String.length value - 13) in
-      let key = Vif_g.cookie_key server in
+      let key = Vif_server.cookie_key server in
       let value =
         Mirage_crypto.AES.GCM.authenticate_decrypt ~key ~nonce ~adata vdata
       in
@@ -123,7 +123,7 @@ let set ?(encrypt = true) ?(cfg = default_config) ?(path = "/") ~name server
   in
   let name = prefix ^ name in
   if encrypt then
-    let key = Vif_g.cookie_key server in
+    let key = Vif_server.cookie_key server in
     let nonce = random 12 in
     let adata = "vif.cookie-" ^ name in
     let value =
