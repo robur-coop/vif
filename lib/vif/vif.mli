@@ -1,4 +1,27 @@
 module Uri : sig
+  (** The [Uri] module provides a small DSL for describing a {i format} that can
+      accept values. [Uri] can be considered as the counterpart of the [Format]
+      module, but for URIs. That is, you can describe a way to construct a URI
+      and apply it to values such as integers or strings.
+
+      {[
+        # require "vif" ;;
+        # let my_uri =
+          let open Vif.Uri in
+          host "robur.coop" / "repo" /% string `Path /?? any
+        ;;
+        val my_uri : (string -> '_w0, '_w0) -> Vif.Uri.t = <abstr>
+        # let () =
+          print_endline (Vif.Uri.eval my_uri "vif");
+          print_endline (Vif.Uri.eval my_uri "hurl")
+        ;;
+        robur.coop/repo/vif
+        robur.coop/repo/hurl
+      ]}
+
+      In other words, [Uri] provides a module for {i typing} URIs (and, by
+      extension, the routes that can be specified to Vif). *)
+
   type 'a atom = 'a Tyre.t
 
   val int : int atom
@@ -27,8 +50,8 @@ module Uri : sig
   val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
   val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
   val ( /?? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
-  val keval : ('f, 'r) t -> (string -> 'r) -> 'f
-  val eval : ('f, string) t -> 'f
+  val keval : ?slash:bool -> ('f, 'r) t -> (string -> 'r) -> 'f
+  val eval : ?slash:bool -> ('f, string) t -> 'f
 end
 
 module Json = Json
@@ -92,9 +115,9 @@ module Multipart_form : sig
           | Error _ -> ...
 
         let routes =
-          let open Vif.U in
-          let open Vif.R in
-          let open Vif.R in
+          let open Vif.Uri in
+          let open Vif.Route in
+          let open Vif.Type in
           [ post (m form) (rel / "login" /?? nil) --> login ]
       ]} *)
 
@@ -259,11 +282,22 @@ module Request : sig
   type request
 
   val headers_of_request : request -> Headers.t
+  (** [headers_of_request] is the header (see {!module:Header}) of the given
+      request. *)
+
   val method_of_request : request -> Method.t
+  (** [method_of_request] is the method (see {!module:Method}) of the given
+      request. *)
+
   val target_of_request : request -> string
+  (** [target_of_request] is the path of the given request. *)
 end
 
 module Queries : sig
+  (** A request not only has content but also parameters ({i queries}) that can
+      be specified via the URI. This module allows you to extract the values
+      specified in the URI to the user when managing the request. *)
+
   val exists : ('c, 'a) Request.t -> string -> bool
   val get : ('c, 'a) Request.t -> string -> string list
 end
@@ -278,6 +312,7 @@ module Route : sig
     ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
+  (** [-->] associates a route to a handler. *)
 end
 
 module Client : sig
@@ -311,11 +346,11 @@ module Client : sig
         let readme =
           let open Vif.Uri in
           host "raw.githubusercontent.com"
-          /% string
-          /% string
+          /% string `Path
+          /% string `Path
           / "refs"
           / "heads"
-          /% string
+          /% string `Path
           / "README.md"
           /?? nil
 
@@ -327,7 +362,7 @@ end
 module Device : sig
   (** {3 Devices.}
 
-      A device is a global instance on the http server with which a "finaliser"
+      A device is a global instance on the HTTP server with which a "finaliser"
       is associated. A device is available from all requests from a
       {!type:Server.t} value. The same device instance is available from all
       domains — interactions with a device must therefore be {i domain-safe}.
@@ -335,8 +370,8 @@ module Device : sig
       A device can be created from several values as well as from other devices.
       Finally, a device is constructed from an end-user value specified by
       {!val:Vif.run}. The idea is to allow the user to construct a value (from,
-      for example, command line parameters) corresponding to a configuration and
-      to construct these devices from this value. *)
+      for example, command line parameters or a [.env]) corresponding to a
+      configuration and to construct these devices from this value. *)
 
   type ('value, 'a) arg
   type ('value, 'a) device
@@ -370,8 +405,10 @@ module Server : sig
 
   val device : ('value, 'a) Device.device -> t -> 'a
   (* [device w t] returns the device specified by the [w] parameter and the
-     server [t]. If the latter has not been initialized via the {!val:Vif.run}
-     function, the function raises an exception [Not_found]. *)
+     server [t].
+
+     @raise Not_found if the given device was not initialized via the
+       {!val:Vif.run} function. *)
 end
 
 module Middlewares : sig
@@ -391,7 +428,7 @@ module Middlewares : sig
   type ('cfg, 'v) fn =
     Request.request -> string -> Server.t -> 'cfg -> 'v option
 
-  val make : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) Middleware.t
+  val v : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) Middleware.t
   (** [make ~name fn] creates a new {i middleware} which can be used by the
       server (you must specify the {i witness} returned by this function into
       {!val:run}). *)
@@ -466,16 +503,31 @@ end
 module Response : sig
   (** {3 Response.}
 
-      A response is a construction (monad) whose initial state is {!type:empty}
-      and must end in the state {!type:sent}. Throughout this construction, the
-      user can {!val:add}/{!val:rem}/{!val:set} information in the {i header}.
-      Finally, the user must respond with content (via
+      A response is a construction ({i monad}) whose initial state is
+      {!type:empty} and must end in the state {!type:sent}. Throughout this
+      construction, the user can {!val:add}/{!val:rem}/{!val:set} information in
+      the {i header}. Finally, the user must respond with content (via
       {!val:with_string}/{!val:with_stream}) and a status code. *)
 
   type ('p, 'q, 'a) t
+
   type empty
+  (** The [empty] state is a response that does not yet have any content. The
+      user can transition from this state to the {!type:filled} state using
+      functions such as {!val:with_string} or {!val:with_tyxml}. *)
+
   type filled
+  (** The [filled] state is a response that already has associated content (a
+      stream, a string, etc.). The user can still manipulate the response, such
+      as modifying its header, but can no longer modify the content of the
+      response. However, the user can transition to the {!type:sent} state using
+      the {!val:respond} function. *)
+
   type sent
+  (** The [sent] state is the final state of a response and informs the user
+      that the response has been sent to the client. After this state, any
+      post-modification of the response (including its header) is {b useless}.
+  *)
 
   val with_source :
        ?compression:[> `DEFLATE | `Gzip ]
@@ -506,6 +558,12 @@ module Response : sig
   (** [respond status] responds to the client with the given [status] and with
       the {i already filled} body response. *)
 
+  val redirect_to :
+       ?with_get:bool
+    -> ('c, 'a) Request.t
+    -> ('r, (filled, sent, unit) t) Uri.t
+    -> 'r
+
   (** Headers manipulation. *)
 
   val add : field:string -> string -> ('p, 'p, unit) t
@@ -521,9 +579,12 @@ module Response : sig
 
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
   (** [add_unless_exists ~field value] adds a new [field] with the given [value]
-      into the futur response only if the given [field] does not exists yet. *)
+      into the futur response only if the given [field] {b does not} exists yet.
+  *)
 
   val return : 'a -> ('p, 'p, 'a) t
+  (** [return v] fullfills the construction with a value but it {does not}
+      change the current state of the {i monad}. *)
 
   module Infix : sig
     val ( >>= ) : ('p, 'q, 'a) t -> ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
@@ -593,6 +654,11 @@ module Cookie : sig
 end
 
 module Handler : sig
+  (** The user may want more precise dispatching than Vif can offer. In this
+      case, if Vif cannot find any routes for a given request, handlers are used
+      to possibly provide a response. Handlers therefore allow you to handle
+      cases that cannot be described using Vif's URI and route system. *)
+
   type ('c, 'value) t =
        ('c, string) Request.t
     -> string

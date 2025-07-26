@@ -38,9 +38,9 @@ build: [
 synopsis: ""
 
 pin-depends: [
-  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#2f2a549d01c8a7f86d94a145f9c37abdd128041c" ]
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#48a3fcf8ca19768948f82ebe36955f050c23cd6c" ]
   [ "miou.dev" "git+https://github.com/robur-coop/miou.git#7a1d4097e93317fd154b8a87752045eef5cefa3a" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#5656d0f33fa093b663525340094e86bcc6a0b025" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#321ab900edfe5da2c2ac31b9f65eaaa47b07013e" ]
 ]

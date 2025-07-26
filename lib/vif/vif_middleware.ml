@@ -19,7 +19,7 @@ type ('value, 'a, 'c) ctx = {
   ; user's_value: 'value
 }
 
-let make : type v. name:string -> ('cfg, v) fn -> ('cfg, v) t =
+let v : type v. name:string -> ('cfg, v) fn -> ('cfg, v) t =
  fun ~name fn ->
   let key = Hmap.Key.create (Key.make ~name) in
   Middleware (fn, key)

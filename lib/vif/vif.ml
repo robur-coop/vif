@@ -75,7 +75,7 @@ module Middlewares = struct
 
   type ('cfg, 'v) fn = ('cfg, 'v) Vif_middleware.fn
 
-  let make = Vif_middleware.make
+  let v = Vif_middleware.v
 
   type ('value, 'a, 'c) ctx = {
       server: Vif_server.t

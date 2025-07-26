@@ -90,23 +90,25 @@ let rec eval_query : type r f.
         let fn r = k ((n, eval_top_atom (Tyre.Internal.from_t a) x) :: r) in
         eval_query q fn
 
-let keval : ('a, 'b) t -> (string -> 'b) -> 'a =
- fun (Url (slash, p, q)) k ->
+let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
+ fun ?slash:(force = false) (Url (slash, p, q)) k ->
   eval_path p @@ fun host path ->
   eval_query q @@ fun query ->
   let path =
-    match slash with Slash -> "" :: path | No_slash | Maybe_slash -> path
+    if force then "" :: path
+    else match slash with Slash -> "" :: path | No_slash | Maybe_slash -> path
   in
   let host = Option.value ~default:"" host in
-  let path = String.concat "/" (List.rev path) in
+  let path = match path with [] -> [] | path -> "" :: List.rev path in
+  let path = String.concat "/" path in
   let path = Pct.encode_path path in
   let query = Pct.encode_query query in
   k (host ^ path ^ query)
 
-let eval t = keval t Fun.id
+let eval ?slash t = keval ?slash t Fun.id
 
 type 'a handler = 'a Httpcats.handler
 type response = Httpcats.response
 type error = Httpcats.error
 
-let request ~f a t = keval t @@ fun uri -> Httpcats.request ~f ~uri a
+let request ~fn a t = keval t @@ fun uri -> Httpcats.request ~fn ~uri a
