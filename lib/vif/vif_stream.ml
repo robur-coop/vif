@@ -84,6 +84,12 @@ module Source = struct
       | None -> Bytesrw.Bytes.Slice.eod
     in
     Bytesrw.Bytes.Reader.make fn
+
+  let each fn (Source t) =
+    let rec go src =
+      match t.pull src with None -> t.stop src | Some (x, src) -> fn x; go src
+    in
+    go (t.init ())
 end
 
 type ('a, 'r) sink =

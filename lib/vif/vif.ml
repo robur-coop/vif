@@ -402,6 +402,9 @@ module Request = struct
     | { encoding= Any; _ } -> assert false
 end
 
+type ic = Httpcats.Server.Websocket.ic
+type oc = Httpcats.Server.Websocket.oc
+
 type 'value daemon = {
     queue: 'value user's_function Queue.t
   ; mutex: Miou.Mutex.t
@@ -412,10 +415,13 @@ type 'value daemon = {
 }
 
 and 'value user's_function =
-  | User's_task : Vif_request0.t * 'value fn -> 'value user's_function
+  | User's_request : Vif_request0.t * 'value fn -> 'value user's_function
+  | User's_websocket : 'value ws -> 'value user's_function
 
 and 'value fn =
   Vif_server.t -> 'value -> (Response.empty, Response.sent, unit) Vif_response.t
+
+and 'value ws = Vif_server.t -> 'value -> unit
 
 let to_ctx daemon req0 =
   {
@@ -449,23 +455,28 @@ let rec user's_functions daemon =
     let lst = List.of_seq (Queue.to_seq daemon.queue) in
     Queue.drop daemon.queue; lst
   in
-  let fn (User's_task (req0, fn)) =
-    let _prm =
-      Miou.async ~orphans:daemon.orphans @@ fun () ->
-      try
-        let Vif_response.Sent, () =
-          Vif_response.(run req0 empty) (fn daemon.server daemon.user's_value)
+  let fn = function
+    | User's_websocket fn ->
+        Log.debug (fun m -> m "start to execute a websocket handler");
+        let fn () = fn daemon.server daemon.user's_value in
+        ignore (Miou.async ~orphans:daemon.orphans fn)
+    | User's_request (req0, fn) ->
+        let fn () =
+          try
+            let Vif_response.Sent, () =
+              Vif_response.(run req0 Empty)
+                (fn daemon.server daemon.user's_value)
+            in
+            Vif_request0.close req0;
+            Log.debug (fun m ->
+                m "user's handler for %s terminated" (Vif_request0.peer req0))
+          with exn ->
+            Log.err (fun m ->
+                m "Got an exception from the user's handler: %s"
+                  (Printexc.to_string exn));
+            Vif_request0.report_exn req0 exn
         in
-        Vif_request0.close req0;
-        Log.debug (fun m ->
-            m "user's handler for %s terminated" (Vif_request0.peer req0))
-      with exn ->
-        Log.err (fun m ->
-            m "Got an exception from the user's handler: %s"
-              (Printexc.to_string exn));
-        Vif_request0.report_exn req0 exn
-    in
-    ()
+        ignore (Miou.async ~orphans:daemon.orphans fn)
   in
   List.iter fn tasks; user's_functions daemon
 
@@ -487,7 +498,7 @@ let handler ~default ~middlewares routes daemon =
       *)
       begin
         Miou.Mutex.protect daemon.mutex @@ fun () ->
-        Queue.push (User's_task (req0, fn)) daemon.queue;
+        Queue.push (User's_request (req0, fn)) daemon.queue;
         Miou.Condition.signal daemon.condition
       end
     with exn ->
@@ -497,12 +508,23 @@ let handler ~default ~middlewares routes daemon =
       Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
       raise exn
 
+let ws_handler daemon fn ?stop flow =
+  let fn ic oc =
+    begin
+      Miou.Mutex.protect daemon.mutex @@ fun () ->
+      Queue.push (User's_websocket (fn ic oc)) daemon.queue;
+      Miou.Condition.signal daemon.condition
+    end
+  in
+  Log.debug (fun m -> m "Start to upgrade a connection to websocket");
+  Httpcats.Server.Websocket.upgrade ?stop ~fn flow
+
 type config = Vif_config.config
 
 let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
 let config = Vif_config.config
 
-let process stop cfg server user's_value ready fn =
+let process stop cfg server user's_value ready (fn, ws_fn) =
   Logs.debug (fun m ->
       m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
   let daemon =
@@ -524,20 +546,24 @@ let process stop cfg server user's_value ready fn =
      the same domain as the [process] domain. *)
   match (cfg.Vif_config.http, cfg.Vif_config.tls) with
   | config, Some tls ->
-      Httpcats.Server.with_tls ~parallel ?stop ?config ~backlog:cfg.backlog tls
-        ~ready ~handler:fn cfg.sockaddr;
+      let upgrade flow = ws_handler daemon ws_fn (`Tls flow) in
+      Httpcats.Server.with_tls ~parallel ~upgrade ?stop ?config
+        ~backlog:cfg.backlog tls ~ready ~handler:fn cfg.sockaddr;
       Miou.cancel user's_tasks
   | Some (`H2 _), None ->
       Miou.cancel user's_tasks;
       assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      Httpcats.Server.clear ~parallel ?stop ~config ~ready ~handler:fn
+      let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
+      Httpcats.Server.clear ~parallel ~upgrade ?stop ~config ~ready ~handler:fn
         cfg.sockaddr;
       Miou.cancel user's_tasks
   | None, None ->
+      let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Httpcats.Server.clear ~parallel ?stop ~ready ~handler:fn cfg.sockaddr;
+      Httpcats.Server.clear ~parallel ~upgrade ?stop ~ready ~handler:fn
+        cfg.sockaddr;
       Miou.cancel user's_tasks
 
 let store_pid = function
@@ -584,7 +610,8 @@ let default_from_handlers handlers req target server user's_value =
   | None -> default req target server user's_value
 
 let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
-    ?(middlewares = Middlewares.[]) ?(handlers = []) routes user's_value =
+    ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
+    user's_value =
   let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
@@ -608,26 +635,37 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
   Logs.debug (fun m -> m "devices launched");
   let server = { Vif_server.devices; cookie_key= cfg.Vif_config.cookie_key } in
   let default = default_from_handlers handlers in
+  let websocket =
+    match websocket with
+    | None -> fun _ oc _ _ -> oc (`Connection_close, String.empty)
+    | Some websocket -> websocket
+  in
   let fn0 = handler ~default ~middlewares routes in
+  let ws_fn0 = websocket in
   let rd0 = Miou.Computation.create () in
   let prm0 =
-    Miou.async @@ fun () -> process stop cfg server user's_value rd0 fn0
+    Miou.async @@ fun () ->
+    process stop cfg server user's_value rd0 (fn0, ws_fn0)
   in
   let tasks =
     let fn _ =
       let ready = Miou.Computation.create () in
-      (ready, handler ~default ~middlewares routes)
+      let fn = handler ~default ~middlewares routes in
+      let ws_fn = websocket in
+      (ready, fn, ws_fn)
     in
     List.init domains fn
   in
   let prm1 =
     Miou.async @@ fun () ->
-    let rdn = rd0 :: List.map fst tasks in
+    let rdn = rd0 :: List.map (fun (x, _, _) -> x) tasks in
     List.iter Miou.Computation.await_exn rdn;
     store_pid cfg.pid
   in
   let prmn =
-    let fn (ready, fn) = process stop cfg server user's_value ready fn in
+    let fn (ready, fn, ws_fn) =
+      process stop cfg server user's_value ready (fn, ws_fn)
+    in
     if domains > 0 then Miou.parallel fn tasks else []
   in
   Miou.await_exn prm0;

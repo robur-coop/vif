@@ -11,7 +11,7 @@ type 'a state =
   | Filled : string Vif_stream.source -> filled state
   | Sent : sent state
 
-let empty = Empty
+let _empty = Empty
 let filled from = Filled from
 let sent = Sent
 
@@ -24,6 +24,7 @@ type ('p, 'q, 'a) t =
   | Bind : ('p, 'q, 'a) t * ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
   | Source : string Vif_stream.source -> (empty, filled, unit) t
   | String : string -> (empty, filled, unit) t
+  | Websocket : (empty, sent, unit) t
   | Respond : Vif_status.t -> (filled, sent, unit) t
 
 let bind x fn = Bind (x, fn)
@@ -44,7 +45,7 @@ let redirect_to ?(with_get = true) req uri =
     | _, true (* XXX-to-GET *) -> Respond `See_other
     | _, false (* XXX-to-XXX *) -> Respond `Temporary_redirect
   in
-  Vif_uri.keval uri fn
+  Vif_uri.keval ~slash:true uri fn
 
 module Hdrs = Vif_headers
 
@@ -117,6 +118,14 @@ let with_tyxml ?compression:alg req tyxml =
   in
   Source source
 
+let empty =
+  let field = "content-length" in
+  let* () = add ~field "0" in
+  let* _ = add_unless_exists ~field:"connection" "close" in
+  String ""
+
+let websocket = Websocket
+
 let response ?headers:(hdrs = []) status req0 =
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
@@ -156,6 +165,21 @@ let response ?headers:(hdrs = []) status req0 =
       let stop = H2.Body.Writer.close in
       (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
 
+let upgrade ?headers:(hdrs = []) req0 =
+  match Vif_request0.reqd req0 with
+  | `V1 reqd ->
+      let hdrs = H1.Headers.of_list hdrs in
+      H1.Reqd.respond_with_upgrade reqd hdrs
+  | `V2 _ -> assert false
+
+let sha1 =
+  let ( $ ) = Fun.compose in
+  Digestif.(Base64.encode_string $ SHA1.to_raw_string $ SHA1.digest_string)
+
+let get_nonce req =
+  let hdrs = Vif_request0.headers req in
+  Vif_headers.get hdrs "sec-websocket-key"
+
 let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
  fun req s t ->
   let headers = ref [] in
@@ -187,6 +211,14 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
         if Vif_request0.version req = 1 then
           headers := Vif_headers.add_unless_exists !headers "connection" "close";
         (Filled (Vif_stream.Source.list [ str ]), ())
+    | Empty, Websocket -> begin
+        match get_nonce req with
+        | None -> assert false (* TODO *)
+        | Some nonce ->
+            let hdrs1 = H1.Websocket.Handshake.server_headers ~sha1 ~nonce in
+            let headers = H1.Headers.to_list hdrs1 in
+            upgrade ~headers req; (Sent, ())
+      end
     | Filled from, Respond status ->
         let headers = !headers in
         let headers, via =

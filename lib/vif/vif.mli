@@ -264,7 +264,7 @@ module Request : sig
 
   val of_multipart_form :
        (Type.multipart_form, 'a) t
-    -> ('a, [ `Not_found of string | `Invalid_multipart_form ]) result
+    -> ('a, [> `Not_found of string | `Invalid_multipart_form ]) result
 
   val source : ('c, 'a) t -> string Stream.source
   val get : ('cfg, 'v) Middleware.t -> ('c, 'a) t -> 'v option
@@ -554,6 +554,9 @@ module Response : sig
     -> Tyxml.Html.doc
     -> (empty, filled, unit) t
 
+  val empty : (empty, filled, unit) t
+  val websocket : (empty, sent, unit) t
+
   val respond : Status.t -> (filled, sent, unit) t
   (** [respond status] responds to the client with the given [status] and with
       the {i already filled} body response. *)
@@ -684,11 +687,15 @@ val config :
   -> Unix.sockaddr
   -> config
 
+type ic = Httpcats.Server.Websocket.ic
+type oc = Httpcats.Server.Websocket.oc
+
 val run :
      ?cfg:config
   -> ?devices:'value Devices.t
   -> ?middlewares:'value Middlewares.t
   -> ?handlers:('c, 'value) Handler.t list
+  -> ?websocket:(ic -> oc -> Server.t -> 'value -> unit)
   -> (Server.t -> 'value -> (Response.empty, Response.sent, unit) Response.t)
      Route.t
      list

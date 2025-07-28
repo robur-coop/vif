@@ -95,11 +95,15 @@ let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
   eval_path p @@ fun host path ->
   eval_query q @@ fun query ->
   let path =
-    if force then "" :: path
-    else match slash with Slash -> "" :: path | No_slash | Maybe_slash -> path
+    match slash with Slash -> "" :: path | No_slash | Maybe_slash -> path
   in
   let host = Option.value ~default:"" host in
-  let path = match path with [] -> [] | path -> "" :: List.rev path in
+  let path =
+    match path with
+    | [] when force -> [ ""; "" ]
+    | [] -> []
+    | path -> "" :: List.rev path
+  in
   let path = String.concat "/" path in
   let path = Pct.encode_path path in
   let query = Pct.encode_query query in
