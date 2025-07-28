@@ -1,3 +1,9 @@
+(* Part of this code is based on the streaming project and
+   Copyright (c) 2020 Rizo I. <rizo@odis.io>
+   SPDX-License-Identifier: ISC
+   Copyright (c) 2024 Romain Calascibetta <romain.calascibetta@gmail.com>
+*)
+
 (** {1:bqueue Bounded queue.}
 
     A bounded queue is a queue that can be shared between two tasks (whether

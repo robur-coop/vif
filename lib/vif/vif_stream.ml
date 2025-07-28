@@ -1,3 +1,9 @@
+(* Part of this code is based on the streaming project and
+   Copyright (c) 2020 Rizo I. <rizo@odis.io>
+   SPDX-License-Identifier: ISC
+   Copyright (c) 2024 Romain Calascibetta <romain.calascibetta@gmail.com>
+*)
+
 let src = Logs.Src.create "vif.stream"
 
 module Log = (val Logs.src_log src : Logs.LOG)

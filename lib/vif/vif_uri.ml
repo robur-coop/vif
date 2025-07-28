@@ -1,3 +1,9 @@
+(* Part of this code is based on the furl project and
+   Copyright (c) 2015 Gabriel Radanne <drupyo@zoho.com>
+   SPDX-License-Identifier: MIT
+   Copyright (c) 2025 Romain Calascibetta <romain.calascibetta@gmail.com>
+*)
+
 type 'a atom = 'a Tyre.t
 
 type ('fu, 'return) path =

@@ -4,7 +4,7 @@ authors: ["Robur <team@robur.coop>"]
 homepage: "https://github.com/robur-coop/vif"
 dev-repo: "git+https://github.com/robur-coop/vif.git"
 bug-reports: "https://github.com/robur-coop/vif/issues"
-license: "BSD-3-clause"
+license: "MIT"
 
 depends: [
   "ocaml" {>= "5.3.0"}
@@ -38,10 +38,10 @@ build: [
 synopsis: ""
 
 pin-depends: [
-  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#f9911ea5f8c935bde2bd5aac581d029c1d623988" ]
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#cea5123d9234e605a25e576ff1c99449041bba5c" ]
   [ "miou.dev" "git+https://github.com/robur-coop/miou.git#7a1d4097e93317fd154b8a87752045eef5cefa3a" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#d2db522b256cbc7328700550c429bbd7cd9667a8" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#be85893726fc2ae041b5f8743f541a012e0ed8cc" ]
   [ "h1.dev" "git+https://github.com/robur-coop/ocaml-h1.git#263fdf3afa72966793ee70ef18102bb3a318a4cf" ]
 ]
