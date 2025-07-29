@@ -42,6 +42,6 @@ pin-depends: [
   [ "miou.dev" "git+https://github.com/robur-coop/miou.git#7a1d4097e93317fd154b8a87752045eef5cefa3a" ]
   [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#be85893726fc2ae041b5f8743f541a012e0ed8cc" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#d7bc407c943114804a9e8469c7f9510a10666190" ]
   [ "h1.dev" "git+https://github.com/robur-coop/ocaml-h1.git#263fdf3afa72966793ee70ef18102bb3a318a4cf" ]
 ]
