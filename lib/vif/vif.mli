@@ -232,8 +232,8 @@ module Type : sig
       type of content of the request (given by the ["Content-Type"]). These
       values represent a certain type such as the type "application/json" or
       "multipart-form/data". These last two can be completed by an "encoding"
-      making it possible to transform the {i raw} content of the requests into
-      an OCaml value. *)
+      making it possible to transform the content of the requests into an OCaml
+      value. *)
 
   type null
   type json
@@ -242,14 +242,22 @@ module Type : sig
 
   val null : (null, unit) t
   val json : (json, Json.t) t
+
   val json_encoding : 'a Jsont.t -> (json, 'a) t
+  (** [json_encoding t] is an [application/json] request whose content is a JSON
+      value that complies with the given format [t]. *)
+
   val m : 'a Multipart_form.t -> (multipart_form, 'a) t
   val multipart_form : (multipart_form, Multipart_form.stream) t
+
   val any : ('c, string) t
+  (** [any] allows requests to be accepted without filtering by [Content-Type].
+      The content is interpreted as a [string]. *)
 end
 
 module Middleware : sig
   type ('cfg, 'v) t
+  (** Type of middlewares. *)
 end
 
 module Request : sig
