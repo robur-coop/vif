@@ -1,0 +1,474 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>My enhanced userspace - Vif, a simple webserver in OCaml</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Vif, a simple webserver in OCaml</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="my-enhanced-userspace"><a class="header" href="#my-enhanced-userspace">My enhanced userspace</a></h1>
+<p>We have seen the basic elements for our user space. However, our website is
+still quite limited, as it assumes that the user knows how to send a POST
+request via the command line. In this chapter, we will improve our user space
+so that:</p>
+<ul>
+<li>we have an HTML page with a login form</li>
+<li>we can handle the <code>multipart/form-data</code> format rather than the JSON format</li>
+<li>we have a dynamic HTML page depending on whether the user is logged in or not</li>
+</ul>
+<h2 id="static-html-files-and-conan"><a class="header" href="#static-html-files-and-conan">Static HTML files (and <a href="https://github.com/mirage/conan"><code>conan</code></a>)</a></h2>
+<p>When creating a website, we often want to deliver static content such as images
+or HTML pages. When sending these documents to the client, important
+information is sent along with them: the <a href="https://en.wikipedia.org/wiki/Media_type">MIME type</a>.</p>
+<p>This informs the user of the type of content being sent (e.g. whether it is a
+<code>*.png</code> or <code>*.jpg</code> image).</p>
+<p>With this in mind, we have developed software that can recognise the MIME type
+of any file: the <code>conan</code> project. Recognition is not based on the file
+extension, but rather on the content and a database that references most MIME
+types.</p>
+<pre><code class="language-shell">$ conan.file --mime login.html
+text/html
+</code></pre>
+<p>Next, for Vif, we need to add a handler that, depending on the path given by
+the request, not only attempts to find the associated static file, but also
+recognises its MIME type using <code>conan</code> to deliver it to the client. Let's start
+with this HTML form:</p>
+<pre><code class="language-xml">&lt;html&gt;
+&lt;body&gt;
+&lt;form action="/login" method="post" enctype="multipart/form-data"&gt;
+  &lt;label for="username"&gt;Enter your username: &lt;/label&gt;
+  &lt;input type="text" name="username" required /&gt;
+  &lt;label for="password"&gt;Enter your password: &lt;/label&gt;
+  &lt;input type="password" name="password" required /&gt;
+  &lt;input type="submit" value="Login!" /&gt;
+&lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>Since the route for delivering a static file depends on the filename, we will
+introduce a new concept to Vif: <em>default handlers</em>. When Vif cannot find any
+routes for a request, it will execute a series of default handlers until one
+produces a response.</p>
+<p>For static files, Vif already provides such a handler: <code>Vif.Handler.static</code>.
+Just add it to <code>Vif.run</code>:</p>
+<pre><code class="language-ocaml">let () = Miou_unix.run @@ fun () -&gt;
+  let env = { secret= "deadbeef" } in let middlewares = Vif.Middlewares.[ jwt ]
+in let handlers = [ Vif.Handler.static ?top:None ] in Vif.run ~handlers
+~middlewares routes env ;;
+</code></pre>
+<p>The <code>top</code> value corresponds to the location of the static files (so that Vif
+prohibits access to other files deeper in the directory tree). In addition, our
+<code>login.html</code> file is in the same folder as our <code>main.ml</code> file (however, it is
+recommended to create an appropriate folder containing only static files).</p>
+<pre><code class="language-shell">$ hurl http://localhost:8080/login.html
+HTTP/1.1 200 OK
+
+transfer-encoding: chunked
+etag: 3b8eae63b7baa4a7c24bfd8ee7600ee4b97306064e9ea336fca949011058a559
+content-length: 356
+content-type: text/html
+
+&lt;html&gt;
+&lt;body&gt;
+&lt;form action="/login" method="post" enctype="multipart/form-data"&gt;
+  &lt;label for="username"&gt;Enter your username: &lt;/label&gt;
+  &lt;input type="text" name="username" required /&gt;
+  &lt;label for="password"&gt;Enter your password: &lt;/label&gt;
+  &lt;input type="password" name="password" required /&gt;
+  &lt;input type="submit" value="Login!" /&gt;
+&lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>We are now able to deliver static files! Note the appearance of <code>ETag</code>. This is
+information that allows the client to cache the file (and avoid re-downloading
+the content). Finally, note that <code>conan</code> has correctly recognised the MIME type
+of our file.</p>
+<h3 id="mime-type-and-conan"><a class="header" href="#mime-type-and-conan">MIME-type and <code>conan</code></a></h3>
+<p>MIME file recognition is quite difficult and is a topic in itself (in terms of
+performance and ability to recognise strange files). Even though <code>conan</code> finds
+quite a few solutions, it may happen that we are unable to recognise the file
+type. There are other, less obvious ways to transfer the contents of a file
+using Vif (such as <code>Vif.Response.with_file</code>), where you can specify the MIME
+type manually.</p>
+<p>It is also possible to improve <code>conan</code> (and its database) to recognise a subset
+or larger set of files. We will leave it up to the user to choose the best
+solution for their context.</p>
+<h2 id="vif--multipartform-data"><a class="header" href="#vif--multipartform-data">Vif &amp; <code>multipart/form-data</code></a></h2>
+<p>In our form, we specify that we would like to transfer the information in
+<code>multipart/form-data</code> format. This is a somewhat special format that is often
+used for websites. Fortunately, there is an implementation in OCaml that Vif
+uses: <a href="https://github.com/dinosaure/multipart_form">multipart_form</a>.</p>
+<p>Vif extends this library so that it is as easy to use as <code>jsont</code>: we therefore
+offer another DSL for describing the format of your forms:</p>
+<pre><code class="language-ocaml">let login_form =
+  let open Vif.Multipart_form in
+  let fn username password =
+    { username; password } in
+  record fn
+  |+ field "username" string
+  |+ field "password" string
+  |&gt; sealr
+;;
+
+let login req server { secret } =
+  let open Vif.Response.Syntax in
+  match Vif.Request.of_multipart_form req with
+  | Ok ({ username; _ } as v) when login v -&gt;
+    let token = Jwto.encode HS512 secret [ "username", username ] in
+    let token = Result.get_ok token in
+    let str = "Authenticated!\n" in
+    let* () = Vif.Cookie.set ~name:"my-token" server req token in
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req str in
+    Vif.Response.respond `OK
+  | Ok _ -&gt;
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req "Unauthorized!\n" in
+    Vif.Response.respond `Unauthorized
+  | Error _ -&gt;
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let str = Fmt.str "Invalid multipart/form-data\n" in
+    let* () = Vif.Response.with_string req str in
+    Vif.Response.respond (`Code 422)
+;;
+
+let routes =
+  let open Vif.Uri in
+  let open Vif.Route in
+  let open Vif.Type in
+  [ post (m login_form) (rel / "login" /?? nil) --&gt; login
+  ; get (rel /?? nil) --&gt; index ]
+;;
+</code></pre>
+<p>The idea is almost the same as with <code>jsont</code>. We just need to redefine our login
+route with <code>m</code> instead of <code>json_encoding</code> so that Vif accepts requests with a
+<code>Content-Type</code> of <code>multipart/form-data</code>.</p>
+<pre><code class="language-shell">$ hurl -m POST http://localhost:8080/login --multipart username=robur password=42 -p b
+Authenticated!
+</code></pre>
+<h2 id="vif-tyxml-and-ppx"><a class="header" href="#vif-tyxml-and-ppx">Vif, <code>tyxml</code> and <code>ppx</code></a></h2>
+<p>It would now be more useful to transmit HTML content rather than simple text.
+Several solutions are available, but we will use one in particular that
+emphasises the typed generation of an HTML document using <a href="https://github.com/ocsigen/tyxml">TyXML</a>:</p>
+<pre><code class="language-ocaml">#require "tyxml-ppx" ;;
+#require "tyxml" ;;
+
+open Tyxml ;;
+
+let%html index username = {html|
+&lt;html&gt;
+&lt;head&gt;&lt;title&gt;My Vif Website!&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;p&gt;Hello |html} username {html| !&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+|html} ;;
+
+let index username : Tyxml_html.doc = index [ Html.txt username ] ;;
+
+let index req server _env =
+  let open Vif.Response.Syntax in
+  match Vif.Request.get jwt req with
+  | None -&gt;
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req "Unauthorized!\n" in
+    Vif.Response.respond `Unauthorized
+  | Some { username } -&gt;
+    let* () = Vif.Response.with_tyxml req (index username) in
+    Vif.Response.respond `OK
+;;
+</code></pre>
+<p>What's interesting here is that TyXML will check the HTML content to see if it
+complies with standards. Furthermore, if you remove the <code>&lt;head&gt;</code> tag, for
+example, TyXML will complain that this mandatory tag is missing.</p>
+<p>This is not, of course, the only way to deliver content to the client. We can
+also respond with JSON as plain text, as we have done since the beginning of
+this book. This example essentially shows that it is possible to use <code>ppx</code>
+within a Vif script.</p>
+<h2 id="vif--redirections"><a class="header" href="#vif--redirections">Vif &amp; redirections</a></h2>
+<p>One last small detail, but one that may be important: users should now be
+redirected to the main page if they manage to log in, rather than receiving a
+message saying that they are logged in. Vif offers a <code>redirect_to</code> function
+that allows you to redirect the user to a given <code>Vif.Uri.t</code>.</p>
+<pre><code class="language-ocaml">let login req server { secret } =
+  let open Vif.Response.Syntax in
+  match Vif.Request.of_multipart_form req with
+  | Ok ({ username; _ } as v) when login v -&gt;
+    let token = Jwto.encode HS512 secret [ "username", username ] in
+    let token = Result.get_ok token in
+    let str = "Authenticated!\n" in
+    let* () = Vif.Cookie.set ~name:"my-token" server req token in
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req str in
+    Vif.Response.redirect_to req Vif.Uri.(rel /?? any)
+  | Ok _ -&gt;
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req "Unauthorized!\n" in
+    Vif.Response.respond `Unauthorized
+  | Error _ -&gt;
+    let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+    let str = Fmt.str "Invalid multipart/form-data\n" in
+    let* () = Vif.Response.with_string req str in
+    Vif.Response.respond (`Code 422)
+;;
+</code></pre>
+<p>We can now test our user space with a single command (since <code>hurl</code> handles
+redirection and cookies):</p>
+<pre><code class="language-shell">$ curl http://localhost:8080/login -F username=robur -F password=42 -L --cookie-jar cookies.txt
+&lt;!DOCTYPE html&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml"&gt;
+  &lt;head&gt;&lt;title&gt;My Vif Website!&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;p&gt;Hello robur !&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>We're starting to get somewhere. We'll continue using the command line, but we
+can now test our website with our web browser! We're producing HTML content,
+and all we need to do is log in to <a href="http://localhost:8080/login.html">http://localhost:8080/login.html</a> to
+be redirected to our main page!</p>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next steps</a></h2>
+<p>At this point, we can consider that the hardest part is done. However, we would
+surely like to go further and, in particular, communicate with a database
+rather than our simple <code>verify</code> function. In the next chapter, we will see how
+to extend our user space so that we can use a persistent database to which our
+users can register.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="my_basic_userspace.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="a_persistent_userspace.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="my_basic_userspace.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="a_persistent_userspace.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

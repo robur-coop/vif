@@ -1,3 +1,9 @@
+(* Part of this code is based on the streaming project and
+   Copyright (c) 2024 Anton Bachin <antonbachin@yahoo.com>
+   SPDX-License-Identifier: ISC
+   Copyright (c) 2024 Romain Calascibetta <romain.calascibetta@gmail.com>
+*)
+
 let src = Logs.Src.create "vif.cookie"
 
 module Log = (val Logs.src_log src : Logs.LOG)

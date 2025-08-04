@@ -15,11 +15,22 @@
 
 module Bqueue : sig
   type 'a t
+  (** Type of bounded queues. *)
 
   val create : int -> 'a t
+  (** [create capacity] creates a bounded queue which can keep [capacity]
+      elements. *)
+
   val put : 'a t -> 'a -> unit
+  (** [put bq v] puts [v] into [bq]. *)
+
   val get : 'a t -> 'a option
+  (** [get bq] returns the next elements into the queue or [None] if the given
+      bounded queue was closed (and there are no more elements left). *)
+
   val close : 'a t -> unit
+  (** [close bq] closes the given bounded queue. All subsequent calls to
+      {!val:put} will raise an exception. *)
 end
 
 (** {1:sources Sources.}
@@ -42,17 +53,17 @@ end
         let init () = n in
         let pull i = if i = 0 then None else Some (i, i - 1) in
         let stop _ = () in
-        Vif.S.Source { init; pull; stop }
+        Vif.Stream.Source { init; pull; stop }
     ]}
 
     It can be consumed with:
 
     {[
-      # Vif.S.(Stream.from (count_down 3) |> into Sink.sum)
+      # Vif.Stream.(Stream.from (count_down 3) |> into Sink.sum)
       - : int = 6
     ]}
 
-    Sources are "single shot" amd will haver their input exhausted by most
+    Sources are "single shot" and will haver their input exhausted by most
     operations. *)
 
 type 'a source =
@@ -61,17 +72,30 @@ type 'a source =
       ; pull: 's -> ('a * 's) option
       ; stop: 's -> unit
     }
-      -> 'a source
+      -> 'a source  (** Type of sources that produce elements of type ['a]. *)
 
 module Source : sig
   val file : ?offset:int -> string -> string source
+
   val list : 'a list -> 'a source
+  (** [list lst] is a source will all elements from the [lst] list. *)
+
   val dispose : 'a source -> unit
+  (** [dispose src] forces the termination of the source state. This function is
+      useful in situations when a leftover source is produced in
+      {!val:Stream.run}.
+
+      {b NOTE}: If the source is not already initialized, calling this function
+      will first initialize its state before it is terminated. *)
+
   val with_formatter : (Format.formatter -> unit) -> string source
   val with_task : limit:int -> ('a Bqueue.t -> unit) -> 'a source
   val of_bqueue : 'a Bqueue.t -> 'a source
   val to_reader : string source -> Bytesrw.Bytes.Reader.t
+
   val each : ('a -> unit) -> 'a source -> unit
+  (** [each fn src] applies an effectful function [fn] to all elements in [src].
+  *)
 end
 
 (** {1:sinks Sinks.}
@@ -95,7 +119,7 @@ end
         let push acc x = x :: acc in
         let stop acc = List.rev acc in
         let full _ = false in
-        Vif.S.Sink { init; push; full; stop }
+        Vif.Stream.Sink { init; push; full; stop }
     ]}
 
     Sinks are independent from sources and streams. You can think of them as
@@ -109,11 +133,17 @@ type ('a, 'r) sink =
       ; stop: 's -> 'r
     }
       -> ('a, 'r) sink
+      (** Types for sinks that consume elements of type ['a] and, once done,
+          produce a value of type ['b]. *)
 
 module Sink : sig
   val json : unit -> (string, (Json.t, [ `Msg of string ]) result) sink
+
   val string : (string, string) sink
+  (** Consumes and concatenes strings. *)
+
   val list : ('a, 'a list) sink
+  (** Puts all input elements into a list. *)
 end
 
 (** {1:flows Flows.}
@@ -149,12 +179,21 @@ end
     ]} *)
 
 type ('a, 'b) flow = { flow: 'r. ('b, 'r) sink -> ('a, 'r) sink } [@@unboxed]
+(** Stream transformers that consume values of type ['a] and produce values of
+    type ['b]. *)
 
 module Flow : sig
   val identity : ('a, 'a) flow
+  (** A neutral flow that does not change the elements. *)
+
   val compose : ('a, 'b) flow -> ('b, 'c) flow -> ('a, 'c) flow
+  (** Compose two flows to form a new flow. *)
+
   val ( >> ) : ('a, 'b) flow -> ('c, 'a) flow -> ('c, 'b) flow
+  (** [f1 << f2] is [compose f1 f2]. *)
+
   val ( << ) : ('a, 'b) flow -> ('b, 'c) flow -> ('a, 'c) flow
+  (** [f11 >> f2] is [compose f2 f1]. *)
 
   val deflate :
        ?q:De.Queue.t
@@ -193,6 +232,7 @@ end
     source leftovers, {!val:Stream.run} can be used. *)
 
 type 'a stream = { stream: 'r. ('a, 'r) sink -> 'r } [@@unboxed]
+(** Type for streams with elements of type ['a]. *)
 
 module Stream : sig
   val run :

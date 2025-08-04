@@ -65,6 +65,8 @@ module Headers : sig
 end
 
 module Method : sig
+  (** HTTP request methods. *)
+
   type t =
     [ `CONNECT
     | `DELETE
@@ -75,6 +77,7 @@ module Method : sig
     | `PUT
     | `TRACE
     | `Other of string ]
+  (** Type of HTTP request methods. *)
 end
 
 module Multipart_form : sig
@@ -563,7 +566,11 @@ module Response : sig
     -> (empty, filled, unit) t
 
   val empty : (empty, filled, unit) t
+
   val websocket : (empty, sent, unit) t
+  (** [websocket] upgrades the current connection to the websocket protocol. The
+      [websocket] handler specified into {!val:run} takes over and manages this
+      connection according to the WebSocket protocol. *)
 
   val respond : Status.t -> (filled, sent, unit) t
   (** [respond status] responds to the client with the given [status] and with
@@ -676,6 +683,12 @@ module Handler : sig
     -> Server.t
     -> 'value
     -> (Response.empty, Response.sent, unit) Response.t option
+  (** The type of handlers.
+
+      The handler processes the request and can extract its content as a
+      [string]. It also obtains the {i path}/{i target} specified in the request
+      and, like typed handlers, has a value representing the server and the
+      value given to {!val:run}. *)
 
   val static : ?top:Fpath.t -> ('c, 'value) t
 end

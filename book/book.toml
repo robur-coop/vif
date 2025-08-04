@@ -1,0 +1,6 @@
+[book]
+authors = ["Calascibetta Romain"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Vif, a simple webserver in OCaml"
