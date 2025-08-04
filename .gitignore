@@ -1,0 +1,9 @@
+_build
+*.native
+*.byte
+*.so
+*.tar.gz
+_tests
+*.merlin
+*.install
+book/book
