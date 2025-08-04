@@ -6,3 +6,4 @@ _build
 _tests
 *.merlin
 *.install
+book/book
