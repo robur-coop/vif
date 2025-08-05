@@ -25,7 +25,12 @@ EOF
 ```
 
 Next, we need to modify our Vif script so that we can read this database. To do
-this, we will use `caqti-miou`, the `caqti` support with our Miou scheduler.
+this, we will use `caqti-miou`, the `caqti` support with our Miou scheduler. We
+need to install it:
+
+```shell
+$ opam install caqti-miou caqti-driver-sqlite3
+```
 
 Next, we will need to explain to Vif how to create an instance that can
 communicate with our database. Vif uses the concept of _devices_, which are

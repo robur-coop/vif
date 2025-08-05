@@ -15,9 +15,8 @@ let default req _server () =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
   [ get (rel /?? nil) --> default ]
 ;;
 
