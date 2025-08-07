@@ -191,9 +191,8 @@ let default req _server () =
 ;;
 
 let routes =
-  let open Vif.U in
-  let open Vif.R in
-  let open Vif.T in
+  let open Vif.Uri in
+  let open Vif.Route in
   [ get (rel /?? nil) --&gt; default ]
 ;;
 
@@ -776,9 +775,10 @@ produces a response.</p>
 <p>For static files, Vif already provides such a handler: <code>Vif.Handler.static</code>.
 Just add it to <code>Vif.run</code>:</p>
 <pre><code class="language-ocaml">let () = Miou_unix.run @@ fun () -&gt;
-  let env = { secret= "deadbeef" } in let middlewares = Vif.Middlewares.[ jwt ]
-in let handlers = [ Vif.Handler.static ?top:None ] in Vif.run ~handlers
-~middlewares routes env ;;
+  let env = { secret= "deadbeef" } in
+  let middlewares = Vif.Middlewares.[ jwt ] in
+  let handlers = [ Vif.Handler.static ?top:None ] in
+  Vif.run ~handlers ~middlewares routes env ;;
 </code></pre>
 <p>The <code>top</code> value corresponds to the location of the static files (so that Vif
 prohibits access to other files deeper in the directory tree). In addition, our
@@ -978,7 +978,10 @@ CREATE TABLE users (uid INTEGER, username TEXT, password TEXT, PRIMARY KEY(uid))
 EOF
 </code></pre>
 <p>Next, we need to modify our Vif script so that we can read this database. To do
-this, we will use <code>caqti-miou</code>, the <code>caqti</code> support with our Miou scheduler.</p>
+this, we will use <code>caqti-miou</code>, the <code>caqti</code> support with our Miou scheduler. We
+need to install it:</p>
+<pre><code class="language-shell">$ opam install caqti-miou caqti-driver-sqlite3
+</code></pre>
 <p>Next, we will need to explain to Vif how to create an instance that can
 communicate with our database. Vif uses the concept of <em>devices</em>, which are
 <strong>global</strong> instances available from our <code>server</code> instance and therefore

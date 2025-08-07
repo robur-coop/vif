@@ -195,7 +195,10 @@ CREATE TABLE users (uid INTEGER, username TEXT, password TEXT, PRIMARY KEY(uid))
 EOF
 </code></pre>
 <p>Next, we need to modify our Vif script so that we can read this database. To do
-this, we will use <code>caqti-miou</code>, the <code>caqti</code> support with our Miou scheduler.</p>
+this, we will use <code>caqti-miou</code>, the <code>caqti</code> support with our Miou scheduler. We
+need to install it:</p>
+<pre><code class="language-shell">$ opam install caqti-miou caqti-driver-sqlite3
+</code></pre>
 <p>Next, we will need to explain to Vif how to create an instance that can
 communicate with our database. Vif uses the concept of <em>devices</em>, which are
 <strong>global</strong> instances available from our <code>server</code> instance and therefore
