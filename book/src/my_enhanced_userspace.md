@@ -55,9 +55,10 @@ Just add it to `Vif.run`:
 
 ```ocaml
 let () = Miou_unix.run @@ fun () ->
-  let env = { secret= "deadbeef" } in let middlewares = Vif.Middlewares.[ jwt ]
-in let handlers = [ Vif.Handler.static ?top:None ] in Vif.run ~handlers
-~middlewares routes env ;;
+  let env = { secret= "deadbeef" } in
+  let middlewares = Vif.Middlewares.[ jwt ] in
+  let handlers = [ Vif.Handler.static ?top:None ] in
+  Vif.run ~handlers ~middlewares routes env ;;
 ```
 
 The `top` value corresponds to the location of the static files (so that Vif
