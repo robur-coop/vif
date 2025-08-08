@@ -34,7 +34,10 @@ module Route = struct
     | Handler : ('f, 'x) Vif_route.req * ('x, 'r) Vif_uri.t -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
+  let head t = Handler (Request (Some `HEAD, Null), t)
+  let delete t = Handler (Request (Some `DELETE, Null), t)
   let post c t = Handler (Request (Some `POST, c), t)
+  let put c t = Handler (Request (Some `PUT, c), t)
   let route (Handler (req, t)) f = Route (req, t, f)
   let ( --> ) = route
 end

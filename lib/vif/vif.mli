@@ -318,8 +318,13 @@ module Route : sig
   type ('fu, 'return) route
 
   val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val head : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val delete : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
 
   val post :
+    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+
+  val put :
     ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
