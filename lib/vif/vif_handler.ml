@@ -31,7 +31,7 @@ let mime_type path =
   | Error _ -> "application/octet-stream"
   | exception _ -> "application/octet-stream"
 
-let cache req target =
+let cached_on_client_side req target =
   let hdrs = Vif_request.headers req in
   let hash = sha256sum target in
   match Vif_headers.get hdrs "if-none-match" with
@@ -50,34 +50,70 @@ let trim lst =
   let lst = List.drop_while (( = ) "") (List.rev lst) in
   List.rev lst
 
-let static ?(top = pwd) req target _server _ =
-  let target = String.split_on_char '/' target in
-  let target = trim target in
-  let target = String.concat "/" target in
-  let abs_path =
-    let ( let* ) = Result.bind in
-    let* x = Fpath.of_string target in
-    Ok Fpath.(normalize (top // x))
-  in
-  match (Vif_request.meth req, abs_path) with
-  | `GET, Ok abs_path when valid ~top abs_path -> begin
-      let ( let* ) = Vif_response.bind in
-      let process =
-        if cache req abs_path then
-          let* () = Vif_response.with_string req "" in
-          Vif_response.respond `Not_modified
-        else
-          let src = Vif_stream.Source.file (Fpath.to_string abs_path) in
-          let field = "content-type" in
-          let* () = Vif_response.add ~field (mime_type abs_path) in
-          let stat = Unix.stat (Fpath.to_string abs_path) in
-          let field = "content-length" in
-          let* () = Vif_response.add ~field (string_of_int stat.Unix.st_size) in
-          let field = "etag" in
-          let* () = Vif_response.add ~field (sha256sum abs_path) in
-          let* () = Vif_response.with_source req src in
-          Vif_response.respond `OK
-      in
-      Some process
-    end
-  | _ -> None
+module K = struct
+  type t = Fpath.t
+
+  let equal = Fpath.equal
+  let hash = Hashtbl.hash
+end
+
+module V = struct
+  type t = { mtime: float; mime: string }
+
+  let weight _ = 1
+end
+
+module Cache = Lru.M.Make (K) (V)
+
+let cached_on_server_size stat abs_path cache =
+  match Cache.find abs_path cache with
+  | Some { mtime; mime } when mtime >= stat.Unix.st_mtime -> Some mime
+  | Some _ ->
+      Cache.remove abs_path cache;
+      None
+  | None -> None
+
+let static ?(top = pwd) =
+  ();
+  let cache = Cache.create ~random:true 0x100 in
+  fun req target _server _ ->
+    let target = String.split_on_char '/' target in
+    let target = trim target in
+    let target = String.concat "/" target in
+    let abs_path =
+      let ( let* ) = Result.bind in
+      let* x = Fpath.of_string target in
+      Ok Fpath.(normalize (top // x))
+    in
+    match (Vif_request.meth req, abs_path) with
+    | `GET, Ok abs_path when valid ~top abs_path -> begin
+        let ( let* ) = Vif_response.bind in
+        let process =
+          if cached_on_client_side req abs_path then
+            let* () = Vif_response.with_string req "" in
+            Vif_response.respond `Not_modified
+          else
+            let stat = Unix.stat (Fpath.to_string abs_path) in
+            let mime =
+              match cached_on_server_size stat abs_path cache with
+              | Some mime -> mime
+              | None ->
+                  let mime = mime_type abs_path in
+                  let value = { V.mtime= stat.Unix.st_mtime; mime } in
+                  Cache.add abs_path value cache;
+                  mime
+            in
+            let src = Vif_stream.Source.file (Fpath.to_string abs_path) in
+            let field = "content-length" in
+            let size = string_of_int stat.Unix.st_size in
+            let* () = Vif_response.add ~field size in
+            let field = "content-type" in
+            let* () = Vif_response.add ~field mime in
+            let field = "etag" in
+            let* () = Vif_response.add ~field (sha256sum abs_path) in
+            let* () = Vif_response.with_source req src in
+            Vif_response.respond `OK
+        in
+        Some process
+      end
+    | _ -> None

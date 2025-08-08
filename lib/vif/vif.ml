@@ -121,7 +121,7 @@ module Response = struct
       Sys.file_exists (Fpath.to_string path) = false
       || Sys.is_directory (Fpath.to_string path)
     then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
-    if Vif_handler.cache req path then
+    if Vif_handler.cached_on_client_side req path then
       let* () = with_string req "" in
       respond `Not_modified
     else
