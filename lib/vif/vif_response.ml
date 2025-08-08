@@ -127,6 +127,7 @@ let empty =
 let websocket = Websocket
 
 let response ?headers:(hdrs = []) status req0 =
+  let src = Vif_request0.src req0 in
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in
@@ -142,14 +143,16 @@ let response ?headers:(hdrs = []) status req0 =
         | `Closed -> H1.Body.Writer.close body
       in
       let push body str =
-        Log.debug (fun m -> m "<- %d byte(s)" (String.length str));
+        Logs.debug ~src (fun m -> m "<- %d byte(s)" (String.length str));
+        Logs.debug ~src (fun m ->
+            m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) str);
         H1.Body.Writer.write_string body str;
         H1.Body.Writer.flush_with_reason body (fn body);
         body
       in
       let full = H1.Body.Writer.is_closed in
       let stop body =
-        Log.debug (fun m -> m "<- close the response body");
+        Logs.debug ~src (fun m -> m "<- close the response body");
         H1.Body.Writer.close body
       in
       (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
@@ -183,6 +186,7 @@ let get_nonce req =
 let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
  fun req s t ->
   let headers = ref [] in
+  let src = Vif_request0.src req in
   let rec go : type a p q. p state -> (p, q, a) t -> q state * a =
    fun s t ->
     match (s, t) with
@@ -240,7 +244,7 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
           | _ -> (headers, Vif_stream.Flow.identity)
         in
         let into = response ~headers status req in
-        Log.debug (fun m -> m "run our stream to send a response");
+        Logs.debug ~src (fun m -> m "run our stream to send a response");
         let (), src = Vif_stream.Stream.run ~from ~via ~into in
         Option.iter Vif_stream.Source.dispose src;
         (Sent, ())

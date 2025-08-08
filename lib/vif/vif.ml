@@ -456,7 +456,7 @@ let rec user's_functions daemon =
       Miou.Condition.wait daemon.condition daemon.mutex
     done;
     let lst = List.of_seq (Queue.to_seq daemon.queue) in
-    Queue.drop daemon.queue; lst
+    Queue.clear daemon.queue; lst
   in
   let fn = function
     | User's_websocket fn ->
@@ -464,19 +464,24 @@ let rec user's_functions daemon =
         let fn () = fn daemon.server daemon.user's_value in
         ignore (Miou.async ~orphans:daemon.orphans fn)
     | User's_request (req0, fn) ->
+        let src = Vif_request0.src req0 in
+        Logs.debug ~src (fun m -> m "new user's request handler");
         let fn () =
           try
+            Logs.debug ~src (fun m -> m "run user's request handler");
             let Vif_response.Sent, () =
               Vif_response.(run req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
-            Vif_request0.close req0;
-            Log.debug (fun m ->
-                m "user's handler for %s terminated" (Vif_request0.peer req0))
+            Logs.debug ~src (fun m -> m "user's request handler terminated");
+            Vif_request0.close req0
           with exn ->
-            Log.err (fun m ->
-                m "Got an exception from the user's handler: %s"
+            let bt = Printexc.get_raw_backtrace () in
+            Logs.err ~src (fun m ->
+                m "Unexpected exception from the user's handler: %s"
                   (Printexc.to_string exn));
+            Logs.err ~src (fun m ->
+                m "%s" (Printexc.raw_backtrace_to_string bt));
             Vif_request0.report_exn req0 exn
         in
         ignore (Miou.async ~orphans:daemon.orphans fn)
@@ -619,7 +624,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
-  let domains = cfg.domains in
+  let domains = Int.min (Miou.Domain.available ()) cfg.domains in
   let stop =
     match interactive with
     | true ->

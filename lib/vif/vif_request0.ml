@@ -10,6 +10,7 @@ type t = {
   ; on_localhost: bool
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; queries: (string * string list) list
+  ; src: Logs.src
 }
 
 and reqd = Httpcats.Server.reqd
@@ -56,29 +57,31 @@ let peer { socket; _ } =
       Fmt.str "%s:%d" (Unix.string_of_inet_addr inet_addr) port
   | Unix.ADDR_UNIX v -> Fmt.str "<%s>" v
 
-let to_source ~schedule ~close body =
+let src { src; _ } = src
+
+let to_source ~src ~schedule ~close body =
   Vif_stream.Source.with_task ~limit:0x100 @@ fun bqueue ->
   let rec on_eof () =
     close body;
     Vif_stream.Bqueue.close bqueue;
-    Log.debug (fun m -> m "-> request body closed")
+    Logs.debug ~src (fun m -> m "-> request body closed")
   and on_read bstr ~off ~len =
     let str = Bigstringaf.substring bstr ~off ~len in
-    Log.debug (fun m -> m "-> + %d byte(s)" (String.length str));
+    Logs.debug ~src (fun m -> m "-> + %d byte(s)" (String.length str));
     Vif_stream.Bqueue.put bqueue str;
     schedule body ~on_eof ~on_read
   in
   Log.debug (fun m -> m "schedule a reader");
   schedule body ~on_eof ~on_read
 
-let to_source = function
+let to_source ~src = function
   | `V1 reqd ->
       let body = H1.Reqd.request_body reqd in
-      to_source ~schedule:H1.Body.Reader.schedule_read
+      to_source ~src ~schedule:H1.Body.Reader.schedule_read
         ~close:H1.Body.Reader.close body
   | `V2 reqd ->
       let body = H2.Reqd.request_body reqd in
-      to_source ~schedule:H2.Body.Reader.schedule_read
+      to_source ~src ~schedule:H2.Body.Reader.schedule_read
         ~close:H2.Body.Reader.close body
 
 let of_reqd socket reqd =
@@ -102,15 +105,22 @@ let of_reqd socket reqd =
         Miou_unix.to_file_descr fd
     | `Tcp fd -> Miou_unix.to_file_descr fd
   in
-  let on_localhost =
+  let on_localhost, src =
     match Unix.getpeername fd with
-    | Unix.ADDR_UNIX _ -> false
-    | Unix.ADDR_INET (inet_addr, _) ->
-        inet_addr = Unix.inet_addr_loopback
-        || inet_addr = Unix.inet6_addr_loopback
+    | Unix.ADDR_UNIX str ->
+        let src = Logs.Src.create (Fmt.str "vif:<%s>" str) in
+        (false, src)
+    | Unix.ADDR_INET (inet_addr, port) ->
+        let src =
+          Logs.Src.create
+            (Fmt.str "vif:%s:%d" (Unix.string_of_inet_addr inet_addr) port)
+        in
+        ( inet_addr = Unix.inet_addr_loopback
+          || inet_addr = Unix.inet6_addr_loopback
+        , src )
   in
   let queries = Pct.query_of_target target in
-  { request; tls; reqd; socket; on_localhost; body; queries }
+  { request; tls; reqd; socket; on_localhost; body; queries; src }
 
 let headers { request; _ } =
   match request with
@@ -144,12 +154,12 @@ let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost
 let reqd { reqd; _ } = reqd
 
-let source { reqd; _ } =
-  Log.debug (fun m -> m "the user request for a source of the request");
-  to_source reqd
+let source { reqd; src; _ } =
+  Logs.debug ~src (fun m -> m "the user request for a source of the request");
+  to_source ~src reqd
 
-let close { body; _ } =
-  Log.debug (fun m -> m "close the reader body");
+let close { body; src; _ } =
+  Logs.debug ~src (fun m -> m "close the reader body");
   match body with
   | `V1 body -> H1.Body.Reader.close body
   | `V2 body -> H2.Body.Reader.close body
