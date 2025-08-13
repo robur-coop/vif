@@ -17,7 +17,7 @@ depends: [
   "bytesrw"
   "jsont"
   "cmdliner"
-  "httpcats" {>= "1.0.0"}
+  "httpcats" {>= "0.1.0"}
   "tyre"
   "mirage-crypto-rng-miou-unix"
   "jsonm"
