@@ -3,7 +3,6 @@
   $ ./waitfile.exe vif.pid
   $ hurl http://localhost:8080/ -p=b
   Hello World!
-  
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/02-counter/main.ml -p 8080 &
   $ ./waitfile.exe vif.pid
@@ -13,13 +12,11 @@
   $ hurl http://localhost:8080/ > /dev/null
   $ hurl http://localhost:8080/ -p=b
   5 request(s)
-  
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/05-json/main.ml -p 8080 &
   $ ./waitfile.exe vif.pid
   $ hurl -m POST http://localhost:8080/ -p=b username=dinosaure password=foo age:=42
   username: dinosaure, password: foo, age: Some 42, address: None
-  
 
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/07-deflate/main.ml -p 8080 &
@@ -39,13 +36,10 @@
   $ ./waitfile.exe vif.pid
   $ hurl http://localhost:8080/echo/dinosaure -p=b
   Hello, "dinosaure"!
-  
   $ hurl http://localhost:8080/echo/foo -p=b
   Hello, "foo"!
-  
   $ hurl http://localhost:8080/query foo==42 bar==dinosaure -p=b
   foo: 42 ("42")
-  
   $ kill -INT $(cat vif.pid)
   $ cd examples/12-static/
   $ vif --pid-file vif.pid main.ml -p 8080 &
