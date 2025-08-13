@@ -1,3 +1,126 @@
+(** Vif is a simple web framework for OCaml 5 based on [httpcats] and Miou. A
+    tutorial is available {{:https://robur-coop.github.io/vif/} here} to learn
+    how to use it, and another tutorial is available
+    {{:https://robur-coop.github.io/miou/} here} to learn how to use Miou.
+
+    {2 Vif as a library and [vif] as a tool}
+
+    Vif is primarily a library that can be used in a project to launch a web
+    server. However, the distribution also offers a tool called [vif] that
+    allows you to {b natively} interpret an OCaml script in order to launch a
+    web server:
+
+    {[
+      $ cat >main.ml <<EOF
+      #require "vif" ;;
+
+      open Vif ;;
+
+      let default req server () =
+        let field = "content-type" in
+        let* () = Response.add ~field "text/html; charset=utf-8" in
+        let* () = Response.with_string req "Hello World!" in
+        Response.respond `OK
+      ;;
+
+      let routes =
+        let open Vif.Uri in
+        let open Vif.Route in
+        [ get (rel /?? nil) --> default ]
+
+      let () =
+        Miou_unix.run @@ fun () ->
+        Vif.run routes ()
+      ;;
+      EOF
+      $ vif --pid vif.pid main.ml &
+      $ hurl http://localhost:8080/ -p b
+      Hello World!
+      $ kill -SIGINT $(cat vif.pid)
+    ]}
+
+    {2 How to launch a Vif server?}
+
+    The first entry point in Vif is the {!val:run} function, which launches the
+    HTTP server. This function requires several arguments, the purpose of whose
+    is described for the various modules that allow these arguments to be
+    specified.
+
+    Vif essentially requires a list of {i routes} for processing client
+    requests. However, the user can also specify {i middleware} (see
+    {!module:Middlewares}), handlers for processing requests if no routes are
+    recognised (see {!module:Handler}), a function for managing the WebSocket
+    protocol (see {!section:websocket}), and devices that can manage other
+    protocols (such as SQL) (see {!module:Device}).
+
+    {2 Performances & Vif}
+
+    Vif is therefore a web server that takes advantage of OCaml 5 and the use of
+    domains thanks to Miou. If you are interested in the performance that Vif
+    can offer, it is intrinsic to the results obtained with [httpcats]. We
+    therefore invite you to find out more about the latter if you are interested
+    in these metrics.
+
+    But here are the latest results for [httpcats] using the benchmarking
+    framework provided by TechEnpower (on AMD Ryzen 9 7950X 16-Core Processor):
+
+    {t
+      | clients | threads | latencyAvg | latencyMax | latencyStdev | totalRequests |
+      |--------:|--------:|:-----------|:-----------|:-------------|:--------------|
+      |      16 |      16 | 47.43us    | 2.27ms     | 38.48us      | 5303700       |
+      |      32 |      32 | 71.73us    | 1.04ms     | 47.58us      | 7016729       |
+      |      64 |      32 | 140.29us   | 5.72ms     | 121.50us     | 7658146       |
+      |     128 |      32 | 279.73us   | 11.35ms    | 287.92us     | 7977306       |
+      |     256 |      32 | 519.02us   | 16.89ms    | 330.20us     | 7816435       |
+      |     512 |      32 | 1.06ms     | 37.42ms    | 534.14us     | 7409781       |
+    }
+
+    The benchmark can be reproduced using
+    {{:https://github.com/TechEmpower/FrameworkBenchmarks} this project}.
+
+    There is a comparison between [httpcats] (used by Vif) using the Miou
+    scheduler and Eio. For more information on this, we invite you once again to
+    take a look at the [httpcats] project, which goes into detail about the
+    differences between Eio and Miou.
+
+    {2 Typed-way to make a web application}
+
+    Vif was developed in line with the ideals of OCaml and aims to provide a
+    {i typed API} for a whole range of information considered essential for webs
+    development. In particular, Vif offers:
+    - conversion of user-submitted forms into OCaml values (such as records),
+      thanks to [multipart_form]
+    - transformation of JSON content into OCaml values, thanks to [jsont]
+    - the ability to make {i typed} SQL queries whose results can also be
+      transformed into OCaml values, thanks to [caqti] (and [caqti.template])
+    - and the ability to {i type} routes, thanks to [furl]
+
+    {2 A full OCaml implementation of a web server}
+
+    Finally, Vif was developed as part of our cooperative
+    {{:https://robur.coop} robur}, which is reimplementing a whole series of
+    protocols and formats in OCaml. In this case, apart from the fact that we
+    use the TCP/IP implementation provided by your system (although we are also
+    developing our own, see [utcp]), everything required for Vif is strictly
+    implemented in OCaml:
+    - cryptographic primitives are provided by [mirage-crypto]
+    - hash algorithms are provided by [digestif]
+    - checksum algorithms are provided by [checkseum]
+    - the TLS protocol implementation is provided by [ocaml-tls]
+    - [ocaml-dns] can be used for domain name resolution
+    - the {i happy-eyeballs} algorithm can be used to connect to a service which
+      OCaml implementation is provided by the [happy-eyeballs] library
+    - The HTTP/1.1 protocol is implemented by [ocaml-h1]
+    - The H2 protocol is implemented by [h2]
+    - Websockets are implemented by [ocaml-h1] (see [H1.Websocket])
+    - compression ([zlib] and [gzip]) is handled by [decompress]
+    - file MIME type recognition (required for [Content-Type]) is implemented by
+      [conan]
+    - The scheduler is, of course, implemented by [miou]
+
+    Here is an overview of Vif, its dependencies, and what this library has to
+    offer for developing a web application with OCaml 5. *)
+
 module Uri : sig
   (** The [Uri] module provides a small DSL for describing a {i format} that can
       accept values. [Uri] can be considered as the counterpart of the [Format]
@@ -23,29 +146,100 @@ module Uri : sig
       extension, the routes that can be specified to Vif). *)
 
   type 'a atom = 'a Tyre.t
+  (** Type of a typed element that makes up the path and/or queries of a URI. *)
 
   val int : int atom
+  (** [int] is a typed element which recognizes an integer and cast it as OCaml
+      [int]. *)
+
   val string : [ `Path | `Query_value ] -> string atom
+  (** [string where] is a typed element which recognizes a string. This element
+      can be located into a {!type:path} (and, in this case, [`Path] must be
+      used) or as a {!type:query} parameter of an URI (and, in this case,
+      [`Query_value] must be used). *)
+
   val bool : bool atom
+  (** [bool] is a typed element which recognizes [true] or [false] and cast it
+      as an OCaml [bool]. *)
+
   val float : float atom
+  (** [float] is a typed element which recognize a decimal number and cast it as
+      an OCaml [float]. *)
+
   val path : string atom
+  (** [path] is a typed element which recognize anything (including ['/'] and
+      ['?']). It's useful for obtaining (or generating) the end/{i rest} of an
+      URI. *)
+
   val option : 'a atom -> 'a option atom
+  (** [option t] takes a typed element and make it optional. *)
+
   val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
+  (** [conv inj prj] creates a new typed element which produces/expects an other
+      typed value. [inj] describes how to cast a ['a] value to a ['b] value and
+      [prj] describes how to caset a ['b] value to a ['a]. It's useful to create
+      your own typed element:
+
+      {[
+        type fruit = Apple | Orange | Banana
+
+        let fruit =
+          let v =
+            Tyre.regex Re.(alt [ str "apple"; str "orange"; str "banana" ])
+          in
+          let inj = function
+            | "apple" -> Apple
+            | "orange" -> Orange
+            | "banana" -> Banana
+            | _ -> assert false
+          in
+          let prj = function
+            | Apple -> "apple"
+            | Orange -> "orange"
+            | Banana -> "banana"
+          in
+          Vif.Uri.conv inj prj v
+      ]} *)
 
   type ('f, 'r) path
+  (** Type of the path part of an URI. *)
 
   val rel : ('r, 'r) path
+  (** [rel] describes the root of a URI. In this case, the URI based on [rel] is
+      relative to any {i host}. *)
+
   val host : string -> ('r, 'r) path
+  (** [host v] is a specific host (like [localhost]) that the URI based on it
+      must respect (if the URI is used as route) or generate. *)
+
   val ( / ) : ('f, 'r) path -> string -> ('f, 'r) path
+  (** [p / "foo"] operator extends a given path [p] with a new constant part
+      ["foo"]. *)
+
   val ( /% ) : ('f, 'a -> 'r) path -> 'a atom -> ('f, 'r) path
+  (** [p /% v] operator extends a given path [p] with a new {!type:atom} [v]. *)
 
   type ('f, 'r) query
+  (** Type of the query part of an URI. *)
 
   val nil : ('r, 'r) query
+  (** [nil] specifies that the URI has no parameters. If the URI is used to
+      specify a route, this means that a request with even one parameter would
+      {b not} be recognised with [nil]. If you want to recognise a URI with
+      possible parameters, we recommend using {!val:any}. *)
+
   val any : ('r, 'r) query
+  (** [any] specifies that a URI can have no parameters or multiple parameters.
+      It is usually [any] that is preferred to {!val:nil} in the specification
+      of a route. *)
+
   val ( ** ) : string * 'a atom -> ('f, 'r) query -> ('a -> 'f, 'r) query
+  (** [q ** ("foo", v)] is an operator that allows you to add a new parameter
+      ["foo"] with a value whose type is specified by [v] to the list of given
+      parameters [q]. *)
 
   type ('f, 'r) t
+  (** Type of an URI. *)
 
   val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
   val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
@@ -82,7 +276,7 @@ end
 
 module Multipart_form : sig
   (** Vif proposes a way to describe a form via types in order to decode a
-      [multipart-form/data] request and obtain an OCaml record.
+      [multipart/form-data] request and obtain an OCaml record.
 
       Let's take a form such as:
 
@@ -165,7 +359,7 @@ module Multipart_form : sig
 
       @raise Invalid_argument if two or more fields share the same name. *)
 
-  (** {3 Streaming API of [multipart-form/data] requests.}
+  (** {3:multipart-stream Streaming API of [multipart/form-data] requests.}
 
       The user may want to manage a request containing a form in the form of a
       stream. This is particularly useful if you want to upload a file (and,
@@ -173,7 +367,7 @@ module Multipart_form : sig
       temporary file). *)
 
   type part
-  (** Type of a part from the [multipart-form/data] stream.
+  (** Type of a part from the [multipart/form-data] stream.
 
       A part can specify several items of information such as:
       - its {!val:name} (from the [name] parameter of the HTML tag)
@@ -196,7 +390,7 @@ module Multipart_form : sig
   (** [size part] is the size of the part in bytes. *)
 
   type stream = (part * string Stream.source) Stream.stream
-  (** Type of a [multipart-form/data] stream.
+  (** Type of a [multipart/form-data] stream.
 
       It may be necessary to save part of a form as a file rather than storing
       it in memory. Vif allows this using its form stream API. The user can
@@ -234,14 +428,21 @@ module Type : sig
       Vif is able to dispatch requests not only by the route but also by the
       type of content of the request (given by the ["Content-Type"]). These
       values represent a certain type such as the type "application/json" or
-      "multipart-form/data". These last two can be completed by an "encoding"
+      "multipart/form-data". These last two can be completed by an "encoding"
       making it possible to transform the content of the requests into an OCaml
       value. *)
 
   type null
+  (** Type of empty body requests. *)
+
   type json
+  (** Type of JSON requests ([application/json]). *)
+
   type multipart_form
+  (** Type of [multipart/form-data] requests. *)
+
   type ('c, 'a) t
+  (** Type to describe the body of requests. *)
 
   val null : (null, unit) t
   val json : (json, Json.t) t
@@ -251,7 +452,12 @@ module Type : sig
       value that complies with the given format [t]. *)
 
   val m : 'a Multipart_form.t -> (multipart_form, 'a) t
+  (** [m t] is a [multipart/form-data] request whose content is a value that
+      complies with the given format [t]. *)
+
   val multipart_form : (multipart_form, Multipart_form.stream) t
+  (** [multipart_form] is a [multipart/form-data] request whose content can be
+      consumed as a {i stream} (see {!section:multipart-stream}) *)
 
   val any : ('c, string) t
   (** [any] allows requests to be accepted without filtering by [Content-Type].
@@ -265,12 +471,26 @@ end
 
 module Request : sig
   type ('c, 'a) t
+  (** Type of a request. *)
 
   val target : ('c, 'a) t -> string
+  (** [target req] corresponds to the path requested by the request [req]. The
+      invariant is that it always starts with a slash ['/'] .*)
+
   val meth : ('c, 'a) t -> Method.t
+  (** [meth req] is the method (see {!module:Method}) of the given request
+      [req]. *)
+
   val version : ('c, 'a) t -> int
+  (** [version req] is the HTTP version used to communicate. *)
+
   val headers : ('c, 'a) t -> Headers.t
+  (** [headers req] returns headers (see {!module:Headers}) of the given request
+      [req]. *)
+
   val accept : ('c, 'a) t -> string list
+  (** [accept req] returns what the client can accept and understand. *)
+
   val of_json : (Type.json, 'a) t -> ('a, [ `Msg of string ]) result
 
   val of_multipart_form :
@@ -278,7 +498,10 @@ module Request : sig
     -> ('a, [> `Not_found of string | `Invalid_multipart_form ]) result
 
   val source : ('c, 'a) t -> string Stream.source
+
   val get : ('cfg, 'v) Middleware.t -> ('c, 'a) t -> 'v option
+  (** [get middleware req] returns the value optionally added by the given
+      [middleware] and the request [req]. *)
 
   (** {3:request-middleware Requests for middlewares}
 
@@ -291,9 +514,10 @@ module Request : sig
       {{!val:headers_of_request} headers}). *)
 
   type request
+  (** Type of a request (in the view of a middleware). *)
 
   val headers_of_request : request -> Headers.t
-  (** [headers_of_request] is the header (see {!module:Header}) of the given
+  (** [headers_of_request] is the headers (see {!module:Headers}) of the given
       request. *)
 
   val method_of_request : request -> Method.t
@@ -310,7 +534,12 @@ module Queries : sig
       specified in the URI to the user when managing the request. *)
 
   val exists : ('c, 'a) Request.t -> string -> bool
+  (** [exists req query] checks whether the [query] information has been
+      provided by the user via the URI. *)
+
   val get : ('c, 'a) Request.t -> string -> string list
+  (** [get req query] returns the values associated with the key [query] given
+      in the URI. *)
 end
 
 module Route : sig
@@ -318,8 +547,16 @@ module Route : sig
   type ('fu, 'return) route
 
   val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  (** [get uri] describes a route which matches a [GET] request with the given
+      path [uri]. a [GET] request does not have any contents. *)
+
   val head : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  (** [head uri] describes a route which matches a [HEAD] request with the given
+      path [uri]. A [HEAD] request does not have any contents. *)
+
   val delete : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  (** [delete uri] describes a route which matches a [DELETE] request with the
+      given path [uri]. A [DELETE] request does not have any contents. *)
 
   val post :
     ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
@@ -328,7 +565,7 @@ module Route : sig
     ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
-  (** [-->] associates a route to a handler. *)
+  (** [r --> f] associates a route [r] to a handler [f]. *)
 end
 
 module Client : sig
@@ -378,19 +615,47 @@ end
 module Device : sig
   (** {3 Devices.}
 
-      A device is a global instance on the HTTP server with which a "finaliser"
-      is associated. A device is available from all requests from a
-      {!type:Server.t} value. The same device instance is available from all
-      domains — interactions with a device must therefore be {i domain-safe}.
+      A {i device} is a global instance that Vif initialises at the same time as
+      the HTTP server. The purpose of a {i device} is to access another global
+      {i resource} that is not related to HTTP things but is necessary to
+      implement certain logic within your request handlers.
 
-      A device can be created from several values as well as from other devices.
-      Finally, a device is constructed from an end-user value specified by
-      {!val:Vif.run}. The idea is to allow the user to construct a value (from,
-      for example, command line parameters or a [.env]) corresponding to a
-      configuration and to construct these devices from this value. *)
+      An example of devices is a {i connection pool} to a SQL server to enable
+      our request handlers to communicate with it. Instead of initiating a
+      connection to the database for each request within our request handlers,
+      it is possible to initialise a connection pool when the Vif server is
+      launched, which can then be used by our request handlers {b in parallel}.
+      It is therefore a {b global} resource that can be retrieved within request
+      handlers using {!val:Server.get}. Here is an example of a [caqti]
+      {i device} (used to communicate with an SQL server):
+
+      {[
+        type cfg = { sw: Caqti_miou.Switch.t; uri: Uri.t }
+
+        let caqti =
+          let finally (module Conn : Caqti_miou.CONNECTION) =
+            Conn.disconnect ()
+          in
+          Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri } ->
+          match Caqti_miou_unix.connect ~sw uri with
+          | Ok conn -> conn
+          | Error err ->
+              Logs.err (fun m -> m "%a" Caqti_error.pp err);
+              Fmt.failwith "%a" Caqti_error.pp err
+
+        let () =
+          Miou_unix.run @@ fun () ->
+          Caqti_miou.Switch.run @@ fun sw ->
+          let uri = Uri.of_string "sqlite3:foo.sqlite?create=false" in
+          let cfg = { sw; uri } in
+          Vif.run ~devices:Vif.Devices.[ caqti ] routes cfg
+      ]} *)
 
   type ('value, 'a) arg
+  (** Type of an argument to initialize a device. *)
+
   type ('value, 'a) device
+  (** Type of a device. *)
 
   type ('value, 'fn, 'r) args =
     | [] : ('value, 'value -> 'r, 'r) args
@@ -399,8 +664,17 @@ module Device : sig
         -> ('value, 'a -> 'fn, 'r) args
 
   val value : ('value, 'a) device -> ('value, 'a) arg
+  (** [value device] describes the given device [device] as an argument to
+      initialize another device (see {!val:v}). *)
+
   val const : 'a -> ('value, 'a) arg
+  (** [const v] gives a constant value to the initializer of a device (see
+      {!val:v}). *)
+
   val map : ('value, 'f, 'r) args -> 'f -> ('value, 'r) arg
+  (** [map args fn] describes a function which requires few arguments and return
+      a value which will be used by the initializer of a new device (see
+      {!val:v}). *)
 
   val v :
        name:string
@@ -408,6 +682,21 @@ module Device : sig
     -> ('v, 'f, 'r) args
     -> 'f
     -> ('v, 'r) device
+  (** [v ~name ~finally args fn] creates a new {i device} which can be
+      initialized and finalized by Vif. A device can require the result of some
+      other devices. In that case, {!val:value} is used to pass required devices
+      to the initializer of the new device. A device can also require constant
+      values. In that case, {!val:const} is used to pass as an argument the
+      value to the initializer of the new device. Finally, the device can
+      require a final abstract value that corresponds to the value given to
+      {!val:run}.
+
+      From the {!type:Server.t} value, the user can retrieve the device in
+      request handlers and middleware via {!val:Server.device}.
+
+      {b NOTE}: There cannot be a cyclic dependency between devices, i.e. device
+      {i a} cannot depend on device {i b} that depends on device {i a}. In this
+      case, Vif will fail with an error. *)
 end
 
 module Devices : sig
@@ -431,11 +720,40 @@ module Middlewares : sig
   (** {3:middlewares Middlewares.}
 
       Middleware is a function {!type:fn} that applies to all requests. The user
-      can introspect the header (and only the header) of the requests in order
-      to add information (such as the connected user if a field in the header
+      can introspect the headers (and only the headers) of the requests in order
+      to add information (such as the connected user if a field in the headers
       provides such information). This information added to the request can be
-      retrieved from the handlers associated with the routes via
-      {!val:Request.get}. *)
+      retrieved from the request handlers via {!val:Request.get}.
+
+      Here is an example of middleware confirming client authentication via the
+      ["Authorization"] field:
+
+      {[
+        let ( let* ) = Option.bind
+
+        let decode str =
+          match String.split_on_char ' ' str with
+          | [ "Basic"; b64 ] ->
+              let data = Base64.decode b64 in
+              let* data = Result.to_option data in
+              let data = String.split_on_char ':' data in
+              let username = List.hd data and password = List.tl data in
+              let password = String.concat ":" password in
+              Some (username password)
+          | _ -> None
+
+        let auth =
+          VIf.Middlewares.v ~name:"auth" @@ fun req _target _server _ ->
+          let hdrs = Vif.Request.headers_of_request req in
+          let* value = Vif.Headers.get hdrs "Authorization" in
+          let* username, password = decode value in
+          Some (username, password)
+
+        let () =
+          Miou_unix.run @@ fun () ->
+          let middlewares = Vif.Middlewares.[ auth ] in
+          Vif.run ~middlewares routes ()
+      ]} *)
 
   type 'cfg t =
     | [] : 'cfg t
@@ -443,11 +761,16 @@ module Middlewares : sig
 
   type ('cfg, 'v) fn =
     Request.request -> string -> Server.t -> 'cfg -> 'v option
+  (** Type of function which implements a middleware. *)
 
   val v : name:string -> ('cfg, 'v) fn -> ('cfg, 'v) Middleware.t
   (** [make ~name fn] creates a new {i middleware} which can be used by the
       server (you must specify the {i witness} returned by this function into
-      {!val:run}). *)
+      {!val:run}).
+
+      Once all middlewares has been executed on the incoming request, it is
+      possible to obtain the values calculated by these middlewares using
+      {!val:Request.get}. *)
 end
 
 module Status : sig
@@ -522,10 +845,16 @@ module Response : sig
       A response is a construction ({i monad}) whose initial state is
       {!type:empty} and must end in the state {!type:sent}. Throughout this
       construction, the user can {!val:add}/{!val:rem}/{!val:set} information in
-      the {i header}. Finally, the user must respond with content (via
-      {!val:with_string}/{!val:with_stream}) and a status code. *)
+      the {i headers}. Finally, the user must respond with content (via
+      {!val:with_string}/{!val:with_stream}) and a status code.
+
+      The interest behind this monad with preconditions and postconditions is to
+      enforce the developer to respond only once to the client. This monad also
+      enforces that the developer {b must} respond—in fact, the only way to not
+      respond in a request handler is to raise an exception. *)
 
   type ('p, 'q, 'a) t
+  (** Type of the response monad. *)
 
   type empty
   (** The [empty] state is a response that does not yet have any content. The
@@ -535,14 +864,14 @@ module Response : sig
   type filled
   (** The [filled] state is a response that already has associated content (a
       stream, a string, etc.). The user can still manipulate the response, such
-      as modifying its header, but can no longer modify the content of the
+      as modifying its headers, but can no longer modify the content of the
       response. However, the user can transition to the {!type:sent} state using
       the {!val:respond} function. *)
 
   type sent
   (** The [sent] state is the final state of a response and informs the user
       that the response has been sent to the client. After this state, any
-      post-modification of the response (including its header) is {b useless}.
+      post-modification of the response (including its headers) is {b useless}.
   *)
 
   val with_source :
@@ -571,6 +900,7 @@ module Response : sig
     -> (empty, filled, unit) t
 
   val empty : (empty, filled, unit) t
+  (** [empty] fills the current response without contents. *)
 
   val websocket : (empty, sent, unit) t
   (** [websocket] upgrades the current connection to the websocket protocol. The
@@ -586,6 +916,8 @@ module Response : sig
     -> ('c, 'a) Request.t
     -> ('r, (filled, sent, unit) t) Uri.t
     -> 'r
+  (** [redirect_to ?with_get req uri] responds a redirection to [uri] to the
+      client. *)
 
   (** Headers manipulation. *)
 
@@ -606,7 +938,7 @@ module Response : sig
   *)
 
   val return : 'a -> ('p, 'p, 'a) t
-  (** [return v] fullfills the construction with a value but it {does not}
+  (** [return v] fullfills the construction with a value but it {b does not}
       change the current state of the {i monad}. *)
 
   module Infix : sig
@@ -619,7 +951,7 @@ module Response : sig
 end
 
 module Cookie : sig
-  (** {2 Cookies.}
+  (** {2 Cookies}
 
       {!val:get} and {!val:set} are designed for round-tripping secure cookies.
       The most secure settings applicable to the current server are inferred
@@ -664,6 +996,7 @@ module Cookie : sig
       [name] from cookies. By default, cookies are encrypted. *)
 
   val pp_error : error Fmt.t
+  (** Pretty printer of {!type:error}s. *)
 
   val set :
        ?encrypt:bool
@@ -674,6 +1007,9 @@ module Cookie : sig
     -> ('c, 'a) Request.t
     -> string
     -> ('p, 'p, unit) Response.t
+  (** [set ?encrypt ?cfg ?path ~name server req value] creates a new cookie
+      [name] on the client side with the value [value] that can be retrieved
+      with {!val:get} afterwards. By default, the cookie is encrypted. *)
 end
 
 module Handler : sig

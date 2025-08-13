@@ -53,7 +53,7 @@
   $ hurl http://localhost:8080/index.html -p=h
   transfer-encoding: chunked
   etag: a127b2e10213e869311e4413f33ef0a8e5c69c2d407ca4056afedbabc695359d
-  content-length: 105
   content-type: text/html
+  content-length: 105
   $ kill -INT $(cat vif.pid)
   $ cd ../../
