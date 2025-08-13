@@ -38,7 +38,5 @@ build: [
 synopsis: ""
 
 pin-depends: [
-  [ "multipart_form.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
-  [ "multipart_form-miou.dev" "git+https://github.com/dinosaure/multipart_form.git#5d01e12f1f2744b61f42a4b0807b67d6075a30b6" ]
   [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#50f01e0e84b7f161db11e9640793158b9a50eb08" ]
 ]
