@@ -12,8 +12,6 @@
   bytesrw
   cmdliner
   hmap
-  hxd.core
-  hxd.string
   fpath
   conan-database.light
   conan-unix
