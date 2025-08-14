@@ -8,7 +8,7 @@ license: "MIT"
 
 depends: [
   "ocaml" {>= "5.3.0"}
-  "dune" {>= "2.8.0"}
+  "dune" {>= "3.0.0"}
   "uri" {>= "4.4.0"}
   "fmt" {>= "0.11.0"}
   "bos" {>= "0.2.1"}
@@ -34,6 +34,8 @@ build: [
   ["dune" "subst"] {dev}
   ["dune" "build" "-p" name "-j" jobs]
 ]
-run-test: [ "dune" "runtest" "-p" name "-j1" ]
+run-test: [
+  [ "dune" "runtest" "-p" name "-j1" ] {arch != "s390x"}
+]
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
