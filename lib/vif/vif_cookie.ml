@@ -101,7 +101,6 @@ let get ?(encrypted = true) ~name server req0 =
       let alphabet = Base64.uri_safe_alphabet in
       let* value = Base64.decode ~pad:false ~alphabet value in
       let err = `Invalid_encrypted_cookie in
-      Log.debug (fun m -> m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) value);
       let* () = guard err @@ fun () -> String.length value >= 14 in
       let* () = guard err @@ fun () -> value.[0] == '\x00' in
       let nonce = String.sub value 1 12 in
@@ -173,7 +172,7 @@ let set ?(encrypt = true) ?(cfg = default_config) ?(path = "/") ~name server
     | true, _, _, true, _ -> "__Secure-"
     | _ -> ""
   in
-  if encrypt then (
+  if encrypt then
     let key = Vif_server.cookie_key server in
     let nonce = random 12 in
     let adata = "vif.cookie-" ^ name in
@@ -182,10 +181,9 @@ let set ?(encrypt = true) ?(cfg = default_config) ?(path = "/") ~name server
     in
     let alphabet = Base64.uri_safe_alphabet in
     let value = "\x00" ^ nonce ^ value in
-    Log.debug (fun m -> m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) value);
     let value = Base64.encode_exn ~pad:false ~alphabet value in
     let value = set_cookie cfg ~path (prefix ^ name) value in
-    Vif_response.add ~field:"set-cookie" value)
+    Vif_response.add ~field:"set-cookie" value
   else
     let value = set_cookie cfg ~path name value in
     Vif_response.add ~field:"set-cookie" value
