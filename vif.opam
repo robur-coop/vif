@@ -34,9 +34,4 @@ build: [
   ["dune" "subst"] {dev}
   ["dune" "build" "-p" name "-j" jobs]
 ]
-
-synopsis: ""
-
-pin-depends: [
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#50f01e0e84b7f161db11e9640793158b9a50eb08" ]
-]
+synopsis: "A simple web framework for OCaml 5"
