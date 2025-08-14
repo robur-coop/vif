@@ -143,9 +143,6 @@ let response ?headers:(hdrs = []) status req0 =
         | `Closed -> H1.Body.Writer.close body
       in
       let push body str =
-        Logs.debug ~src (fun m -> m "<- %d byte(s)" (String.length str));
-        Logs.debug ~src (fun m ->
-            m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) str);
         H1.Body.Writer.write_string body str;
         H1.Body.Writer.flush_with_reason body (fn body);
         body
