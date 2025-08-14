@@ -14,13 +14,12 @@
       $ cat >main.ml <<EOF
       #require "vif" ;;
 
-      open Vif ;;
-
       let default req server () =
+        let open Vif.Response.Syntax in
         let field = "content-type" in
-        let* () = Response.add ~field "text/html; charset=utf-8" in
-        let* () = Response.with_string req "Hello World!" in
-        Response.respond `OK
+        let* () = Vif.Response.add ~field "text/html; charset=utf-8" in
+        let* () = Vif.Response.with_string req "Hello World!" in
+        Vif.Response.respond `OK
       ;;
 
       let routes =
@@ -80,13 +79,13 @@
 
     There is a comparison between [httpcats] (used by Vif) using the Miou
     scheduler and Eio. For more information on this, we invite you once again to
-    take a look at the [httpcats] project, which goes into detail about the
+    take a look into the [httpcats] project, which goes into detail about the
     differences between Eio and Miou.
 
     {2 Typed-way to make a web application}
 
     Vif was developed in line with the ideals of OCaml and aims to provide a
-    {i typed API} for a whole range of information considered essential for webs
+    {i typed API} for a whole range of information considered essential for web
     development. In particular, Vif offers:
     - conversion of user-submitted forms into OCaml values (such as records),
       thanks to [multipart_form]
@@ -116,7 +115,6 @@
     - compression ([zlib] and [gzip]) is handled by [decompress]
     - file MIME type recognition (required for [Content-Type]) is implemented by
       [conan]
-    - The scheduler is, of course, implemented by [miou]
 
     Here is an overview of Vif, its dependencies, and what this library has to
     offer for developing a web application with OCaml 5. *)
@@ -242,10 +240,25 @@ module Uri : sig
   (** Type of an URI. *)
 
   val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  (** [path /? queries] is an operator which permits to construct an URI where
+      the slash at the end of the given path [path] is not required (to delimit
+      queries then). *)
+
   val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  (** [path //? queries] is an operator which permits to construct an URI where
+      the slash at theend of the given path [path] {b is required} and delimit
+      queries then. *)
+
   val ( /?? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  (** [path /?? queries] is an operator which permits to construct an URI where
+      the slash is {b optionnal} between the given path [path] and queries. *)
+
   val keval : ?slash:bool -> ('f, 'r) t -> (string -> 'r) -> 'f
+  (** [keval ?slash uri fn] compiles an URI [uri] into a [string] and pass it to
+      [fn]. *)
+
   val eval : ?slash:bool -> ('f, string) t -> 'f
+  (** [eval ?slash uri] compiles an URI [uri] into a [string]. *)
 end
 
 module Json = Json
