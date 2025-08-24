@@ -7,13 +7,11 @@ let foo =
   Vif.Device.v ~name:"foo" ~finally [] @@ fun () -> Foo
 ;;
 
-open Vif ;;
-
 let default req server () =
-  let open Response.Syntax in
+  let open Vif.Response.Syntax in
   let Foo = Vif.Server.device foo server in
-  let* () = Response.with_string req "ok\n" in
-  Response.respond `OK
+  let* () = Vif.Response.with_string req "ok\n" in
+  Vif.Response.respond `OK
 ;;
 
 let routes =

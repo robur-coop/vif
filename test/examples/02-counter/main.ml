@@ -3,15 +3,13 @@
 
 let counter = Atomic.make 0 ;;
 
-open Vif ;;
-
 let default req _server () =
-  let open Response.Syntax in
+  let open Vif.Response.Syntax in
   let v = Atomic.fetch_and_add counter 1 in
   let str = Fmt.str "%d request(s)\n" (succ v) in
-  let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
-  let* () = Response.with_string req str in
-  Response.respond `OK
+  let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+  let* () = Vif.Response.with_string req str in
+  Vif.Response.respond `OK
 ;;
 
 let routes =
