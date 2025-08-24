@@ -1,13 +1,11 @@
 #require "vif" ;;
 
-open Vif ;;
-
 let default req _server () =
-  let open Response.Syntax in
+  let open Vif.Response.Syntax in
   let str = "Hello World!\n" in
-  let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
-  let* () = Response.with_string req str in
-  Response.respond `OK
+  let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+  let* () = Vif.Response.with_string req str in
+  Vif.Response.respond `OK
 ;;
 
 let routes =

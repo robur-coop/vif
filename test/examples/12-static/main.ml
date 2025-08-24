@@ -1,9 +1,7 @@
 #require "vif" ;;
 
-open Vif ;;
-
 let default req server _ =
-  Response.with_file ~compression:`DEFLATE req (Fpath.v "index.html")
+  Vif.Response.with_file ~compression:`DEFLATE req (Fpath.v "index.html")
 ;;
 
 let routes =
@@ -14,5 +12,5 @@ let routes =
 ;;
 
 let () = Miou_unix.run @@ fun () ->
-  Vif.run ~handlers:[ Handler.static ] routes ()
+  Vif.run ~handlers:[ Vif.Handler.static ] routes ()
 ;;

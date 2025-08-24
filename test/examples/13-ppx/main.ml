@@ -35,8 +35,6 @@ let apply username age : Tyxml_html.doc =
   apply [ Html.txt str ]
 ;;
 
-open Vif ;;
-
 type credential =
   { username : string
   ; password : string
@@ -44,23 +42,22 @@ type credential =
 ;;
 
 let login req server cfg =
-  let open Response.Syntax in
+  let open Vif.Response.Syntax in
   match Vif.Request.of_multipart_form req with
   | Ok { username; password; age } ->
-    Logs.debug (fun m -> m "new user %S" username);
-    let* () = Response.with_tyxml req (apply username age) in
-    Response.respond `OK
+    let* () = Vif.Response.with_tyxml req (apply username age) in
+    Vif.Response.respond `OK
   | _ ->
     let field = "content-type" in
-    let* () = Response.add ~field "text/plain; charset=utf-8" in
-    let* () = Response.with_string req "Invalid multipart-form\n" in
-    Response.respond (`Code 422)
+    let* () = Vif.Response.add ~field "text/plain; charset=utf-8" in
+    let* () = Vif.Response.with_string req "Invalid multipart-form\n" in
+    Vif.Response.respond (`Code 422)
 ;;
 
 let default req _server () =
-  let open Response.Syntax in
-  let* () = Response.with_tyxml req form in
-  Response.respond `OK
+  let open Vif.Response.Syntax in
+  let* () = Vif.Response.with_tyxml req form in
+  Vif.Response.respond `OK
 ;;
 
 let form =

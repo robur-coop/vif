@@ -23,8 +23,6 @@ let foo =
   |> Object.finish
 ;;
 
-open Vif ;;
-
 let deserialize req _server () =
   let open Vif.Response.Syntax in
   match Vif.Request.of_json req with
@@ -37,14 +35,14 @@ let deserialize req _server () =
           Fmt.(Dump.option string)
           foo.address
       in
-      let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
-      let* () = Response.with_string req str in
-      Response.respond `OK
+      let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+      let* () = Vif.Response.with_string req str in
+      Vif.Response.respond `OK
   | Error (`Msg msg) ->
       Logs.err (fun m -> m "Invalid JSON: %s" msg);
-      let* () = Response.add ~field:"content-type" "text/plain; charset=utf-8" in
-      let* () = Response.with_string req msg in
-      Response.respond (`Code 422)
+      let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
+      let* () = Vif.Response.with_string req msg in
+      Vif.Response.respond (`Code 422)
 ;;
 
 let routes =

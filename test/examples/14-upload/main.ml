@@ -5,7 +5,6 @@
 #require "mirage-crypto-rng" ;;
 
 open Tyxml ;;
-open Vif ;;
 
 let%html form = {html|
 <html>
@@ -27,9 +26,9 @@ let%html form = {html|
 let form : Tyxml_html.doc = form ;;
 
 let default req _server cfg =
-  let open Response.Syntax in
-  let* () = Response.with_tyxml req form in
-  Response.respond `OK
+  let open Vif.Response.Syntax in
+  let* () = Vif.Response.with_tyxml req form in
+  Vif.Response.respond `OK
 ;;
 
 let upload req server cfg =
@@ -38,19 +37,18 @@ let upload req server cfg =
     if Sys.file_exists (Uuidm.to_string uuidm)
     then rand () else uuidm  in
   let fn (part, src) =
-    Logs.debug (fun m -> m "Got a new part");
-    match Multipart_form.name part with
+    match Vif.Multipart_form.name part with
     | Some "image" ->
         let filename = rand () in
         let filename = Uuidm.to_string filename in
-        Stream.Stream.to_file filename (Stream.Stream.from src)
+        Vif.Stream.Stream.to_file filename (Vif.Stream.Stream.from src)
     | _ ->
-        Stream.Stream.(drain (from src)) in
-  let open Response.Syntax in
-  let stream = Result.get_ok (Request.of_multipart_form req) in
-  Stream.Stream.each fn stream;
-  let* () = Response.with_string req "ok\n" in
-  Response.respond `OK
+        Vif.Stream.Stream.(drain (from src)) in
+  let open Vif.Response.Syntax in
+  let stream = Result.get_ok (Vif.Request.of_multipart_form req) in
+  Vif.Stream.Stream.each fn stream;
+  let* () = Vif.Response.with_string req "ok\n" in
+  Vif.Response.respond `OK
 ;;
 
 let routes =
@@ -62,5 +60,5 @@ let routes =
 ;;
 
 let () = Miou_unix.run @@ fun () ->
-  Vif.run ~handlers:[ Handler.static ] routes ()
+  Vif.run ~handlers:[ Vif.Handler.static ] routes ()
 ;;
