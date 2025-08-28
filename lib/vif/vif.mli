@@ -553,6 +553,9 @@ module Queries : sig
   val get : ('c, 'a) Request.t -> string -> string list
   (** [get req query] returns the values associated with the key [query] given
       in the URI. *)
+
+  val all : ('c, 'a) Request.t -> (string * string list) list
+  (** [all req] returns all the query parameters as an associative list. *)
 end
 
 module Route : sig
