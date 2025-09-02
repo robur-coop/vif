@@ -52,7 +52,12 @@ $ kill -SIGINT $(cat vid.pid)
 
 The [examples](./test/examples) folder contains several examples of the use of
 `vif`. It shows the management of more complex requests (json, multipart-form,
-etc.) as well as the use of an SQL database with [caqti][caqti].
+etc.) as well as the use of an SQL database with [caqti][caqti]. A complete
+example of a web application that uses `dune` is available [here][example-dune].
+It is a summary of our tutorial available [here][tutorial]: creating a user
+space with a chatroom using Vif.
 
 [hurl]: https://github.com/robur-coop/hurl
 [caqti]: https://github.com/paurkedal/ocaml-caqti/
+[example-dune]: ./examples/with-dune/
+[tutorial]: https://robur-coop.github.io/vif/
