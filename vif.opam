@@ -28,6 +28,11 @@ depends: [
   "hmap"
   "tyxml" {>= "4.6.0"}
   "hurl" {with-test}
+  "jwto" {with-test}
+  "caqti-miou" {with-test}
+  "caqti-driver-sqlite3" {with-test}
+  "brr" {with-test}
+  "tyxml-ppx" {with-test}
 ]
 conflicts: [ "result" {< "1.5"} ]
 build: [

@@ -1,21 +1,19 @@
 #require "vif" ;;
 
-open Vif ;;
-
 let deflate req server () =
-  let open Response.Syntax in
-  let* () = Response.with_string ~compression:`DEFLATE req "Hello World!\n" in
+  let open Vif.Response.Syntax in
+  let* () = Vif.Response.with_string ~compression:`DEFLATE req "Hello World!\n" in
   let field = "content-type" in
-  let* () = Response.add ~field "text/plain; charset=utf-8" in
-  Response.respond `OK
+  let* () = Vif.Response.add ~field "text/plain; charset=utf-8" in
+  Vif.Response.respond `OK
 ;;
 
 let gzip req server () =
-  let open Response.Syntax in
-  let* () = Response.with_string ~compression:`Gzip req "Hello World!\n" in
+  let open Vif.Response.Syntax in
+  let* () = Vif.Response.with_string ~compression:`Gzip req "Hello World!\n" in
   let field = "content-type" in
-  let* () = Response.add ~field "text/plain; charset=utf-8" in
-  Response.respond `OK
+  let* () = Vif.Response.add ~field "text/plain; charset=utf-8" in
+  Vif.Response.respond `OK
 ;;
 
 let routes =

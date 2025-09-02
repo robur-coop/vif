@@ -895,6 +895,7 @@ module Response : sig
     -> ('c, 'a) Request.t
     -> string Stream.source
     -> (empty, filled, unit) t
+  (** [with_string req src] responds the given stream [src] to the client. *)
 
   val with_string :
        ?compression:[> `DEFLATE | `Gzip ]
@@ -914,6 +915,7 @@ module Response : sig
     -> ('c, 'a) Request.t
     -> Tyxml.Html.doc
     -> (empty, filled, unit) t
+  (** [with_tyxml req tyxml] responds an HTML contents [tyxml] to the client. *)
 
   val empty : (empty, filled, unit) t
   (** [empty] fills the current response without contents. *)

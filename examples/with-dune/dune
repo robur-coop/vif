@@ -1,0 +1,30 @@
+(executable
+ (name main)
+ (modules main)
+ (preprocess
+  (pps tyxml-ppx))
+ (libraries vif jwto caqti-miou caqti-miou.unix caqti-driver-sqlite3))
+
+(executable
+ (name chat)
+ (modules chat)
+ (modes js)
+ (libraries brr))
+
+(rule
+ (target vif.db)
+ (action
+  (bash
+   "sqlite3 vif.db 'CREATE TABLE users (uid INTEGER, username TEXT, password TEXT, PRIMARY KEY(uid));'")))
+
+(rule
+ (alias example)
+ (deps
+  (:main main.exe)
+  login.html
+  registration.html
+  chat.html
+  chat.bc.js
+  vif.db)
+ (action
+  (bash "chmod +w vif.db; ./main.exe")))
