@@ -230,9 +230,13 @@ let get_re url =
 
 (** {3 Extraction.} *)
 
+exception Tyre_exn of exn
+
 (** Extracting atom is just a matter of following the witness. We just need to
     take care of counting where we are in the matching groups. *)
-let extract_atom = extract
+let extract_atom ~original rea s =
+  try extract ~original rea s
+  with exn -> raise (Tyre_exn exn)
 
 (** Since path is in reversed order, we proceed by continuation. *)
 let rec extract_path : type f x r.
@@ -318,7 +322,11 @@ let rec find_and_trigger : type r.
       if Re.Mark.test subs id then
         match e.extract meth c with
         | None -> find_and_trigger ~original e subs l
-        | Some v -> extract_url ~original re_url subs (f v)
+        | Some v ->
+          try extract_url ~original re_url subs (f v)
+          with Tyre_exn exn ->
+            Log.debug (fun m -> m "route converter raised exception: %a" Fmt.exn exn);
+            find_and_trigger ~original e subs l
       else find_and_trigger ~original e subs l
 
 let dispatch : type r c.

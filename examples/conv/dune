@@ -1,0 +1,9 @@
+(executable
+  (name conv)
+  (modules conv)
+  (libraries vif logs.fmt fmt.tty logs.threaded))
+
+(rule
+  (alias conv)
+  (deps conv.exe)
+  (action (run ./conv.exe)))
