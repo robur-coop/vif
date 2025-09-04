@@ -2,6 +2,7 @@
  (package vif)
  (deps
   %{bin:vif}
+  examples/18-route-conv/conv.exe
   waitfile.exe
   (source_tree examples)))
 

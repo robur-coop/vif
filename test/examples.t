@@ -52,3 +52,28 @@
   content-length: 105
   $ kill -INT $(cat vif.pid)
   $ cd ../../
+
+  $ ./examples/18-route-conv/conv.exe --pid vif.pid -p $PORT &
+  $ ./waitfile.exe vif.pid
+  $ hurl http://localhost:$PORT/42
+  HTTP/1.1 200 OK
+  
+  connection: close
+  content-length: 31
+  content-type: text/plain; charset=utf-8
+  
+  Hello World! The number is 42!
+  $ hurl http://localhost:$PORT/horse
+  HTTP/1.1 404 Not Found
+  
+  connection: close
+  content-length: 113
+  content-length: 113
+  content-type: text/plain; charset=utf-8
+  
+  Unspecified destination /horse (GET):
+  user-agent: hurl/0.1.0
+  host: localhost
+  connection: close
+  content-length: 0
+  $ kill -INT $(cat vif.pid)

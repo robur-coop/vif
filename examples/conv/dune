@@ -1,9 +1,0 @@
-(executable
-  (name conv)
-  (modules conv)
-  (libraries vif))
-
-(rule
-  (alias conv)
-  (deps conv.exe)
-  (action (run ./conv.exe)))
