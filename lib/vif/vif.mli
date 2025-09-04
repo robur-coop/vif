@@ -180,8 +180,9 @@ module Uri : sig
   val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
   (** [conv inj prj] creates a new typed element which produces/expects an other
       typed value. [inj] describes how to cast a ['a] value to a ['b] value and
-      [prj] describes how to caset a ['b] value to a ['a]. It's useful to create
-      your own typed element:
+      [prj] describes how to caset a ['b] value to a ['a]. If [inj] raises the
+      route is not matched, and the default route is applied instead.  It's
+      useful to create your own typed element:
 
       {[
         type fruit = Apple | Orange | Banana
