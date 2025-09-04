@@ -166,8 +166,8 @@ module Uri : sig
 
   val rest : string atom
   (** [rest] is a typed element which recognize anything (including ['/'] and
-      ['?']). It's useful for obtaining (or generating) the end/{i rest} of an
-      URI. *)
+      ['?']; that is, including {i queries} part of the path). It's useful for
+      obtaining (or generating) the end/{i rest} of an URI. *)
 
   val path : string atom
   (** [path] is a typed element which recognize anything (including ['/'])
