@@ -55,13 +55,7 @@
 
   $ vif --pid vif.pid examples/18-route-conv/conv.ml -p $PORT &
   $ ./waitfile.exe vif.pid
-  $ hurl http://localhost:$PORT/42
-  HTTP/1.1 200 OK
-  
-  connection: close
-  content-length: 31
-  content-type: text/plain; charset=utf-8
-  
+  $ hurl http://localhost:$PORT/42 -p=b
   Hello World! The number is 42!
   $ hurl http://localhost:$PORT/horse
   HTTP/1.1 404 Not Found

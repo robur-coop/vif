@@ -3,6 +3,7 @@
  (deps
   %{bin:vif}
   waitfile.exe
+  (package vif)
   (source_tree examples)))
 
 (executable
