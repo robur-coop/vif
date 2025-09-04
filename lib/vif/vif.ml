@@ -234,7 +234,6 @@ module Multipart_form = struct
        | `Fail of string ]
 
   let rec until_await ({ queue; parse } as ctx) push acc str =
-    Logs.debug (fun m -> m "until_await");
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.of_bqueue bqueue in
@@ -244,11 +243,12 @@ module Multipart_form = struct
         match parse (`String str) with
         | `Continue -> `Continue (ctx, acc)
         | `Done _tree -> `Stop acc
-        | `Fail _ -> Fmt.failwith "Invalid multipart-form/data"
+        | `Fail msg ->
+            Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
+            Fmt.failwith "Invalid multipart/form-data"
       end
 
   let rec until_done ({ queue; parse } as ctx) push acc =
-    Logs.debug (fun m -> m "until_done");
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.of_bqueue bqueue in
@@ -300,13 +300,33 @@ module Multipart_form = struct
     in
     { flow }
 
-  let flat_parts : ('a * string source, 'a * string) flow =
+  let flat_parts : ('a * string source, 'a * string Miou.t) flow =
     let flow (Sink k) =
       let init () = k.init () in
       let push acc (hdrs, from) =
-        let str, src = Stream.run ~from ~via:Flow.identity ~into:Sink.string in
-        Option.iter Source.dispose src;
-        k.push acc (hdrs, str)
+        (* NOTE(dinosaure): Here, consumption must be asynchronous. The
+           composition of several flows (done in the [parse] function) has no
+           idea about scheduling: that is, this composition is done strictly
+           sequentially (we execute [multipart_form.push], then we execute
+           [flat_parts.push]). A problem arises when [flat_parts] has not
+           consumed everything (when the part is larger than 1K) and therefore
+           blocks. However, since the composition between flows does not
+           recognise the idea of scheduling, if [flat_parts.push] blocks, it
+           also blocks [multipart_form.push]. This results in a kind of
+           _deadlock_.
+
+           We therefore need to create tasks for each entry that consumes the
+           content and ensure that the [push] function of [flat_tasks] never
+           blocks. [multipart_form] can then continue without being blocked. *)
+        let prm =
+          Miou.async @@ fun () ->
+          let via = Flow.identity in
+          let into = Sink.string in
+          let str, src = Stream.run ~from ~via ~into in
+          Option.iter Source.dispose src;
+          str
+        in
+        k.push acc (hdrs, prm)
       in
       let full acc = k.full acc in
       let stop acc = k.stop acc in
@@ -366,9 +386,11 @@ module Multipart_form = struct
           ~into:Sink.list
       in
       Option.iter Source.dispose src;
-      let fn (hdrs, str) =
+      (* NOTE(dinosaure): all [prm] from [lst] are normally done since
+         [multipart_form] has normally consumed everything from [from]. *)
+      let fn (hdrs, prm) =
         let hdrs, meta = aggregate hdrs in
-        ((meta, hdrs), str)
+        ((meta, hdrs), Miou.await_exn prm)
       in
       Ok (List.map fn lst)
     with _exn -> Error `Invalid_multipart_form
