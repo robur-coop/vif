@@ -164,10 +164,15 @@ module Uri : sig
   (** [float] is a typed element which recognize a decimal number and cast it as
       an OCaml [float]. *)
 
+  val rest : string atom
+  (** [rest] is a typed element which recognize anything (including ['/'] and
+      ['?']; that is, including {i queries} part of the path). It's useful for
+      obtaining (or generating) the end/{i rest} of an URI. *)
+
   val path : string atom
-  (** [path] is a typed element which recognize anything (including ['/'] and
-      ['?']). It's useful for obtaining (or generating) the end/{i rest} of an
-      URI. *)
+  (** [path] is a typed element which recognize anything (including ['/'])
+      except the {i queries} part of the path (like [?foo=bar]). It's useful for
+      obtaining (or generating) the end of an URI path. *)
 
   val option : 'a atom -> 'a option atom
   (** [option t] takes a typed element and make it optional. *)

@@ -11,7 +11,8 @@ module Uri = struct
     Tyre.(conv prj inj (regex Vif_route.Ext.arbitrary_int))
 
   let string c = Tyre.regex (Vif_route.Ext.string c)
-  let path = Tyre.regex Re.(rep1 any)
+  let rest = Tyre.regex Re.(rep1 any)
+  let path = Tyre.regex Re.(rep1 (compl [ char '?' ]))
 
   let bool =
     let prj = function "true" -> true | _ -> false
