@@ -16,13 +16,12 @@ $ opam install vif hurl
 $ cat >main.ml <<EOF
 #require "vif" ;;
 
-open Vif ;;
-
 let default req server () =
   let field = "content-type" in
-  let* () = Response.add ~field "text/html; charset=utf-8" in
-  let* () = Response.with_string req "Hello World!" in
-  Response.respond `OK
+  let open Vif.Response.Syntax in
+  let* () = Vif.Response.add ~field "text/html; charset=utf-8" in
+  let* () = Vif.Response.with_string req "Hello World!" in
+  Vif.Response.respond `OK
 ;;
 
 let routes =
