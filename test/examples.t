@@ -55,8 +55,12 @@
 
   $ vif --pid vif.pid examples/18-route-conv/main.ml -p $PORT &
   $ ./waitfile.exe vif.pid
+This matches the "number" route:
   $ hurl http://localhost:$PORT/42 -p=b
   Hello World! The number is 42!
+One might think this matches the "horse" route, but it is actually matched by
+the "number" route - but the "number" route does not trigger as the converter
+raises an exception through `int_of_string`!
   $ hurl http://localhost:$PORT/horse -p=b
   Unspecified destination /horse (GET):
   user-agent: hurl/0.1.0
