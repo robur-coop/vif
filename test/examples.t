@@ -53,7 +53,7 @@
   $ kill -INT $(cat vif.pid)
   $ cd ../../
 
-  $ ./examples/18-route-conv/conv.exe --pid vif.pid -p $PORT &
+  $ vif --pid vif.pid examples/18-route-conv/conv.ml -p $PORT &
   $ ./waitfile.exe vif.pid
   $ hurl http://localhost:$PORT/42
   HTTP/1.1 200 OK

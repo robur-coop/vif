@@ -1,3 +1,5 @@
+#require "vif";;
+
 let field = "content-type"
 
 let number req number _server () =
@@ -23,17 +25,7 @@ let routes =
   [ get (rel /% bad_int /?? nil) --> number
   ; get (rel / "horse" /?? nil) --> horse ]
 
-let run _ =
+let () =
   Miou_unix.run @@ fun () ->
   Vif.run routes ()
-
-open Cmdliner
-
-let term = Term.(const run $ Vif.setup_config)
-
-let cmd =
-  let doc = "conv" and man = [] in
-  let info = Cmd.info "conv" ~doc ~man in
-  Cmd.v info term
-
-let () = Cmd.(exit @@ eval cmd)
+;;
