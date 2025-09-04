@@ -1,7 +1,7 @@
 (executable
   (name conv)
   (modules conv)
-  (libraries vif logs.fmt fmt.tty logs.threaded))
+  (libraries vif))
 
 (rule
   (alias conv)
