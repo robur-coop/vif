@@ -296,13 +296,39 @@ type 'r re_ex =
 (* It's important to keep the order here, since Re will choose
    the first regexp if there is ambiguity.
 *)
-let rec build_info_list idx = function
+let rec build_info_list p idx = function
   | [] -> ([], [])
-  | Route (req, url, f) :: l ->
+  | Route ((Request (meth, _) as req), url, f) :: l when p meth ->
       let idx, re_url, re = re_url idx url in
-      let rel, wl = build_info_list idx l in
+      let rel, wl = build_info_list p idx l in
       let id, re = Re.mark re in
       (re :: rel, ReEx (req, f, id, re_url) :: wl)
+  | Route (Request _, _, _) :: l -> build_info_list p idx l
+
+let build_info_list p l =
+  let rel, wl = build_info_list p 1 l in
+  Re.(compile @@ whole_string @@ alt rel), wl
+
+let build_info l =
+  (* First figure out what methods the routes match *)
+  (* We abuse Vif_method.Map as a set *)
+  let methods =
+    List.fold_left
+      (fun acc r ->
+         match r with
+         | Route (Request (None, _), _, _) -> acc
+         | Route (Request (Some meth, _), _, _) ->
+           Vif_method.Map.add meth () acc)
+      Vif_method.Map.empty
+      l
+  in
+  let methods =
+    Vif_method.Map.mapi
+      (fun meth () ->
+         build_info_list (function None -> true | Some meth' -> Vif_method.equal meth meth') l)
+      methods
+  and jokers = build_info_list Option.is_none l in
+  (methods, jokers)
 
 type request = {
     extract:
@@ -331,19 +357,29 @@ let rec find_and_trigger : type r.
               find_and_trigger ~original e subs l)
       else find_and_trigger ~original e subs l
 
+let match_ (methods, jokers) meth s =
+  let ( let+ ) x f = Option.map f x in
+  match Vif_method.Map.find_opt meth methods with
+  | Some (re, wl) ->
+    let+ subs = Re.exec_opt re s in
+    (subs, wl)
+  | None ->
+    let+ subs = Re.exec_opt (fst jokers) s in
+    (subs, snd jokers)
+
 let dispatch : type r c.
        default:((c, string) Vif_request.t -> string -> r)
     -> r t list
+    -> meth:Vif_method.t
     -> request:request
     -> target:string
     -> r =
  fun ~default l ->
-  let rel, wl = build_info_list 1 l in
-  let re = Re.(compile @@ whole_string @@ alt rel) in
-  fun ~request:e ~target ->
+  let info = build_info l in
+  fun ~meth ~request:e ~target ->
     let s = prepare_uri (Uri.of_string target) in
-    match Re.exec_opt re s with
+    match match_ info meth s with
     | None -> default (Option.get (e.extract None Any)) s
-    | Some subs -> (
+    | Some (subs, wl) -> (
         try find_and_trigger ~original:s e subs wl
         with Not_found -> default (Option.get (e.extract None Any)) s)
