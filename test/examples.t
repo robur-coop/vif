@@ -74,7 +74,7 @@ raises an exception through `int_of_string`!
   $ ./../../waitfile.exe vif.pid
   $ hurl http://localhost:$PORT/ --method=GET -p=b greeting==Bob
   Hello GET Bob!
-  $ hurl http://localhost:$PORT/ --method=POST -p=b greeting==Dylan
+  $ hurl http://localhost:$PORT/ --multipart --method=POST -p=b greeting==Dylan
   Hello POST Dylan!
   $ kill -INT $(cat vif.pid)
   $ cd ../../
