@@ -327,7 +327,7 @@ let build_info l =
       (fun meth () ->
          build_info_list (function None -> true | Some meth' -> Vif_method.equal meth meth') l)
       methods
-  and jokers = build_info_list Option.is_none l
+  and jokers = build_info_list Option.is_none l in
   (methods, jokers)
 
 type request = {
