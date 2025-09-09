@@ -912,6 +912,7 @@ module Response : sig
   val with_file :
        ?mime:string
     -> ?compression:[> `DEFLATE | `Gzip ]
+    -> ?etag:string
     -> ('c, 'a) Request.t
     -> Fpath.t
     -> (empty, sent, unit) t
