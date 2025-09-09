@@ -68,3 +68,13 @@ raises an exception through `int_of_string`!
   connection: close
   content-length: 0
   $ kill -INT $(cat vif.pid)
+
+  $ cd examples/19-regex-method/
+  $ vif --pid-file vif.pid main.ml -p $PORT &
+  $ ./../../waitfile.exe vif.pid
+  $ hurl http://localhost:$PORT/ --method=GET -p=b greeting==Bob
+  Hello GET Bob!
+  $ hurl http://localhost:$PORT/ --method=POST -p=b greeting==Dylan
+  Hello POST Dylan!
+  $ kill -INT $(cat vif.pid)
+  $ cd ../../
