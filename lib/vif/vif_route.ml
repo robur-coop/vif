@@ -305,7 +305,11 @@ let rec build_info_list p idx = function
       (re :: rel, ReEx (req, f, id, re_url) :: wl)
   | Route (Request _, _, _) :: l -> build_info_list p idx l
 
-let build_info_list l =
+let build_info_list p l =
+  let rel, wl = build_info_list p 1 l in
+  Re.(compile @@ whole_string @@ alt rel), wl
+
+let build_info l =
   (* First figure out what methods the routes match *)
   (* We abuse Vif_method.Map as a set *)
   let methods =
@@ -318,11 +322,13 @@ let build_info_list l =
       Vif_method.Map.empty
       l
   in
-  Vif_method.Map.mapi
-    (fun meth () ->
-       build_info_list (function None -> true | Some meth' -> Vif_method.equal meth meth') 1 l)
-    methods,
-  build_info_list Option.is_none 1 l
+  let methods =
+    Vif_method.Map.mapi
+      (fun meth () ->
+         build_info_list (function None -> true | Some meth' -> Vif_method.equal meth meth') l)
+      methods
+  and jokers = build_info_list Option.is_none l
+  (methods, jokers)
 
 type request = {
     extract:
@@ -351,7 +357,7 @@ let rec find_and_trigger : type r.
               find_and_trigger ~original e subs l)
       else find_and_trigger ~original e subs l
 
-let match_ methods jokers meth s =
+let match_ (methods, jokers) meth s =
   let ( let+ ) x f = Option.map f x in
   match Vif_method.Map.find_opt meth methods with
   | Some (re, wl) ->
@@ -369,16 +375,10 @@ let dispatch : type r c.
     -> target:string
     -> r =
  fun ~default l ->
-  let methods, jokers = build_info_list l in
-  let methods =
-    Vif_method.Map.map
-      (fun (rel, wl) -> Re.(compile @@ whole_string @@ alt rel), wl)
-      methods
-  in
-  let jokers = Re.(compile @@ whole_string @@ alt (fst jokers)), snd jokers in
+  let info = build_info l in
   fun ~meth ~request:e ~target ->
     let s = prepare_uri (Uri.of_string target) in
-    match match_ methods jokers meth s with
+    match match_ info meth s with
     | None -> default (Option.get (e.extract None Any)) s
     | Some (subs, wl) -> (
         try find_and_trigger ~original:s e subs wl
