@@ -22,7 +22,10 @@ let pp ppf = function
 
 (* NOTE(reynir): this should be safe. *)
 let compare = Stdlib.compare
-
 let equal a b = compare a b = 0
 
-module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+module Map = Map.Make (struct
+  type nonrec t = t
+
+  let compare = compare
+end)
