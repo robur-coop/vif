@@ -140,9 +140,8 @@ module Response = struct
       let none = return false in
       let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
       let field = "etag" in
-      let etag = match etag with
-        | None -> Vif_handler.sha256sum path
-        | Some etag -> etag
+      let etag =
+        match etag with None -> Vif_handler.sha256sum path | Some etag -> etag
       in
       let* () = add ~field etag in
       let* () = with_source req src in

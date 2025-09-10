@@ -307,7 +307,7 @@ let rec build_info_list p idx = function
 
 let build_info_list p l =
   let rel, wl = build_info_list p 1 l in
-  Re.(compile @@ whole_string @@ alt rel), wl
+  (Re.(compile @@ whole_string @@ alt rel), wl)
 
 let build_info l =
   (* First figure out what methods the routes match *)
@@ -315,17 +315,17 @@ let build_info l =
   let methods =
     List.fold_left
       (fun acc r ->
-         match r with
-         | Route (Request (None, _), _, _) -> acc
-         | Route (Request (Some meth, _), _, _) ->
-           Vif_method.Map.add meth () acc)
-      Vif_method.Map.empty
-      l
+        match r with
+        | Route (Request (None, _), _, _) -> acc
+        | Route (Request (Some meth, _), _, _) -> Vif_method.Map.add meth () acc)
+      Vif_method.Map.empty l
   in
   let methods =
     Vif_method.Map.mapi
       (fun meth () ->
-         build_info_list (function None -> true | Some meth' -> Vif_method.equal meth meth') l)
+        build_info_list
+          (function None -> true | Some meth' -> Vif_method.equal meth meth')
+          l)
       methods
   and jokers = build_info_list Option.is_none l in
   (methods, jokers)
@@ -361,11 +361,11 @@ let match_ (methods, jokers) meth s =
   let ( let+ ) x f = Option.map f x in
   match Vif_method.Map.find_opt meth methods with
   | Some (re, wl) ->
-    let+ subs = Re.exec_opt re s in
-    (subs, wl)
+      let+ subs = Re.exec_opt re s in
+      (subs, wl)
   | None ->
-    let+ subs = Re.exec_opt (fst jokers) s in
-    (subs, snd jokers)
+      let+ subs = Re.exec_opt (fst jokers) s in
+      (subs, snd jokers)
 
 let dispatch : type r c.
        default:((c, string) Vif_request.t -> string -> r)
