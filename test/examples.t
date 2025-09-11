@@ -78,3 +78,9 @@ raises an exception through `int_of_string`!
   Hello POST Dylan!
   $ kill -INT $(cat vif.pid)
   $ cd ../../
+  $ vif examples/20-testing-uris/main.ml
+  "/horse?q=mouth" matches: true
+  "/horse/head?q=mouth&p=hoofs" matches: false
+  Don't look a horse in the mouth.
+  No match.
+  `Converter failure: Invalid_argument("not a mouth")

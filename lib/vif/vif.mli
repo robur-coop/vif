@@ -265,6 +265,18 @@ module Uri : sig
 
   val eval : ?slash:bool -> ('f, string) t -> 'f
   (** [eval ?slash uri] compiles an URI [uri] into a [string]. *)
+
+  val execp : (_, _) t -> string -> bool
+  (** [execp uri str] tests if [str] matches the regular expression for [uri].
+      Note that even if [execp uri str] is [true] the converters of [uri] may
+      fail. *)
+
+  val extract : ('f, 'r) t -> string -> 'f -> ('r, [`Converter_failure of exn | `No_match]) result
+  (** [extract uri str f] matches the string [s] and calls [f] with the
+      extracted value(s). If [str] does not match [uri] [Error `No_match] is
+      returned. If one of the converters of [uri] raises
+      [Error (`Converter_failure exn)] is returned where [exn] is the raised
+      exception. *)
 end
 
 module Json = Json

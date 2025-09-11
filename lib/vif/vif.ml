@@ -25,6 +25,26 @@ module Uri = struct
 
   let option = Tyre.opt
   let conv = Tyre.conv
+
+  let execp uri s =
+    let re = Vif_route.get_re uri in
+    Re.execp (Re.compile (Re.whole_string re)) s
+
+  let extract uri s f =
+    let (_i'dunno, re_url, re) = Vif_route.re_url 1 uri in
+    let id, re = Re.mark re in
+    let subs = Re.exec_opt (Re.compile (Re.whole_string re)) s in
+    match subs with
+    | Some subs ->
+      if Re.Mark.test subs id then
+        try Ok (Vif_route.extract_url ~original:s re_url subs f)
+        with Vif_route.Tyre_exn exn ->
+          Error (`Converter_failure exn)
+      else
+        Error `No_match
+    | None ->
+        Error `No_match
+
 end
 
 module Route = struct
