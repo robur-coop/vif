@@ -39,11 +39,11 @@ module Uri = struct
       if Re.Mark.test subs id then
         try Ok (Vif_route.extract_url ~original:s re_url subs f)
         with Vif_route.Tyre_exn exn ->
-          Error (`ConverterFailure exn)
+          Error (`Converter_failure exn)
       else
-        Error `NoMatch
+        Error `No_match
     | None ->
-        Error `NoMatch
+        Error `No_match
 
 end
 

@@ -26,8 +26,8 @@ let fn p `Mouth =
   Fmt.str "Don't look a %s in the mouth." p
 
 let error = function
-  | `NoMatch -> "No match."
-  | `ConverterFailure exn -> Fmt.str "`ConverterFailure %a" Fmt.exn exn
+  | `No_match -> "No match."
+  | `Converter_failure exn -> Fmt.str "`Converter failure: %a" Fmt.exn exn
 ;;
 
 Vif.Uri.extract (url ()) str fn
