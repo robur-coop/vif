@@ -2,6 +2,7 @@
 
 (* We have to thunk the uri due to OCaml value restriction *)
 let url () =
+  (* This is a bad example of a [_ Vif.Uri.atom] as the converter raises *)
   let mouth =
     Vif.Uri.conv
       (function "mouth" -> `Mouth | _ -> invalid_arg "not a mouth")
