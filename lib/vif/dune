@@ -1,31 +1,57 @@
 (library
  (name vif_core)
  (public_name vif.core)
- (modules vif_core pct json vif_server vif_type vif_cookie vif_device vif_handler vif_headers vif_method vif_middleware vif_multipart_form vif_queries vif_request vif_request0 vif_response vif_route vif_status vif_stream vif_uri)
+ (modules
+  vif_core
+  pct
+  json
+  vif_server
+  vif_type
+  vif_cookie
+  vif_device
+  vif_handler
+  vif_headers
+  vif_method
+  vif_middleware
+  vif_multipart_form
+  vif_queries
+  vif_request
+  vif_request0
+  vif_response
+  vif_route
+  vif_status
+  vif_stream
+  vif_uri)
  (libraries
-   multipart_form
-   multipart_form-miou
-   uri
-   jsonm
-   jsont
-   jsont.bytesrw
-   bytesrw
-   hmap
-   tls
-   fpath
-   decompress.zl
-   decompress.gz
-   tyxml
-   httpcats.core
-   tyre))
+  multipart_form
+  multipart_form-miou
+  uri
+  jsonm
+  jsont
+  jsont.bytesrw
+  bytesrw
+  hmap
+  tls
+  fpath
+  decompress.zl
+  decompress.gz
+  tyxml
+  httpcats.core
+  tyre))
 
 (library
  (name vif)
  (public_name vif)
- (modules vif vif_handler_unix vif_client_unix vif_config_unix vif_options_unix)
+ (modules
+  vif
+  vif_handler_unix
+  vif_client_unix
+  vif_config_unix
+  vif_options_unix)
  (flags
   (:standard -linkall))
- (libraries vif.core
+ (libraries
+  vif.core
   cmdliner
   conan-database.light
   conan-unix
