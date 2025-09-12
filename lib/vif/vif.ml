@@ -243,7 +243,12 @@ let recognize_request ~env req0 =
 module Multipart_form = struct
   open Vif_stream
 
-  type 'id multipart_form_context = { queue: event Queue.t; parse: int parse }
+  type 'id multipart_form_context = {
+      queue: event Queue.t
+    ; parse: int parse
+    ; actives: string Bqueue.t list
+  }
+
   and event = [ `Id of Multipart_form.Header.t * string Bqueue.t ]
 
   and 'id parse =
@@ -252,32 +257,38 @@ module Multipart_form = struct
        | `Done of string Bqueue.t Multipart_form.t
        | `Fail of string ]
 
-  let rec until_await ({ queue; parse } as ctx) push acc str =
+  let rec until_await ({ queue; parse; actives } as ctx) push acc str =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.of_bqueue bqueue in
         let acc = push acc (header, src) in
+        let ctx = { ctx with actives= bqueue :: actives } in
         until_await ctx push acc str
     | exception Queue.Empty -> begin
         match parse (`String str) with
         | `Continue -> `Continue (ctx, acc)
         | `Done _tree -> `Stop acc
         | `Fail msg ->
+            List.iter Bqueue.close actives;
             Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
-            Fmt.failwith "Invalid multipart/form-data"
+            `Stop acc
       end
 
-  let rec until_done ({ queue; parse } as ctx) push acc =
+  let rec until_done ({ queue; parse; actives } as ctx) push acc =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.of_bqueue bqueue in
         let acc = push acc (header, src) in
+        let ctx = { ctx with actives= bqueue :: actives } in
         until_done ctx push acc
     | exception Queue.Empty -> begin
         match parse `Eof with
         | `Continue -> until_done ctx push acc
         | `Done _tree -> acc
-        | `Fail _ -> Fmt.failwith "Invalid multipart-form/data"
+        | `Fail msg ->
+            List.iter Bqueue.close actives;
+            Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
+            acc
       end
 
   let multipart_form req :
@@ -303,7 +314,7 @@ module Multipart_form = struct
       let init () =
         let parse = Multipart_form.parse ~emitters content_type in
         let acc = k.init () in
-        `Continue ({ queue; parse }, acc)
+        `Continue ({ queue; parse; actives= [] }, acc)
       in
       let push state str =
         match state with
