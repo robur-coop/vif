@@ -219,8 +219,9 @@ let handler ~default ~middlewares routes daemon =
     let env = Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty in
     let request = Vif_core.recognize_request ~env req0 in
     let target = Vif_core.Request0.target req0 in
+    let meth = Vif_core.Request0.meth req0 in
     try
-      let fn = dispatch ~request ~target in
+      let fn = dispatch ~meth ~request ~target in
       (* NOTE(dinosaure): the management of the http request must finish and above
          all **not** block. Otherwise, the entire domain is blocked. Thus, the
          management of a new request transfers the user task (which can block) to
