@@ -1,24 +1,39 @@
 (library
+ (name vif_core)
+ (public_name vif.core)
+ (modules vif_core pct json vif_server vif_type vif_cookie vif_device vif_handler vif_headers vif_method vif_middleware vif_multipart_form vif_queries vif_request vif_request0 vif_response vif_route vif_status vif_stream vif_uri)
+ (libraries
+   multipart_form
+   multipart_form-miou
+   uri
+   jsonm
+   jsont
+   jsont.bytesrw
+   bytesrw
+   hmap
+   tls
+   fpath
+   decompress.zl
+   decompress.gz
+   tyxml
+   httpcats.core
+   tyre))
+
+(library
  (name vif)
  (public_name vif)
+ (modules vif vif_handler_unix vif_client_unix vif_config_unix vif_options_unix)
  (flags
   (:standard -linkall))
- (libraries
-  multipart_form
-  uri
-  jsonm
-  jsont
-  jsont.bytesrw
-  bytesrw
+ (libraries vif.core
   cmdliner
-  hmap
-  fpath
   conan-database.light
   conan-unix
-  decompress.zl
-  decompress.gz
   mirage-crypto-rng-miou-unix
-  multipart_form-miou
-  tyxml
-  httpcats
-  tyre))
+  httpcats))
+
+(library
+ (name vifu)
+ (public_name vifu)
+ (modules vifu)
+ (libraries vif.core mhttp))

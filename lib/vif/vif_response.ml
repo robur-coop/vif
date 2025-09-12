@@ -188,8 +188,13 @@ let get_nonce req =
   let hdrs = Vif_request0.headers req in
   Vif_headers.get hdrs "sec-websocket-key"
 
-let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
- fun req s t ->
+let run : type a p q.
+       now:(unit -> int32)
+    -> 'socket Vif_request0.t
+    -> p state
+    -> (p, q, a) t
+    -> q state * a =
+ fun ~now req s t ->
   let headers = ref [] in
   let src = Vif_request0.src req in
   let rec go : type a p q. p state -> (p, q, a) t -> q state * a =
@@ -245,7 +250,7 @@ let run : type a p q. Vif_request0.t -> p state -> (p, q, a) t -> q state * a =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, Vif_stream.Flow.gzip ())
+              (headers, Vif_stream.Flow.gzip now)
           | _ -> (headers, Vif_stream.Flow.identity)
         in
         let into = response ~headers status req in

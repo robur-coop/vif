@@ -6,25 +6,30 @@ end
 
 module Hmap = Hmap.Make (Key)
 
-type ('cfg, 'v) fn =
-  Vif_request0.t -> string -> Vif_server.t -> 'cfg -> 'v option
+type ('socket, 'cfg, 'v) fn =
+  'socket Vif_request0.t -> string -> Vif_server.t -> 'cfg -> 'v option
 
-type ('cfg, 'v) t = Middleware : ('cfg, 'v) fn * 'v Hmap.key -> ('cfg, 'v) t
-type 'cfg m = [] : 'cfg m | ( :: ) : ('cfg, 'a) t * 'cfg m -> 'cfg m
+type ('socket, 'cfg, 'v) t =
+  | Middleware : ('socket, 'cfg, 'v) fn * 'v Hmap.key -> ('socket, 'cfg, 'v) t
 
-type ('value, 'a, 'c) ctx = {
+type ('socket, 'cfg) m =
+  | [] : ('socket, 'cfg) m
+  | ( :: ) : ('socket, 'cfg, 'a) t * ('socket, 'cfg) m -> ('socket, 'cfg) m
+
+type ('socket, 'value, 'a, 'c) ctx = {
     server: Vif_server.t
-  ; req0: Vif_request0.t
+  ; req0: 'socket Vif_request0.t
   ; target: string
   ; user's_value: 'value
 }
 
-let v : type v. name:string -> ('cfg, v) fn -> ('cfg, v) t =
+let v : type v. name:string -> ('socket, 'cfg, v) fn -> ('socket, 'cfg, v) t =
  fun ~name fn ->
   let key = Hmap.Key.create (Key.make ~name) in
   Middleware (fn, key)
 
-let rec run : type v. v m -> (v, 'a, 'c) ctx -> Hmap.t -> Hmap.t =
+let rec run : type v.
+    ('socket, v) m -> ('socket, v, 'a, 'c) ctx -> Hmap.t -> Hmap.t =
  fun lst ctx env ->
   match lst with
   | [] -> env

@@ -1,6 +1,7 @@
 (executable
  (name vif)
  (public_name vif)
+ (package vif)
  (flags
   (:standard -w -18 -linkall))
  (libraries logs.fmt logs.threaded fmt.tty logs.cli fmt.cli vif vif.top))

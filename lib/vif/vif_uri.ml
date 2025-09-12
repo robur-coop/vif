@@ -117,8 +117,9 @@ let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
 
 let eval ?slash t = keval ?slash t Fun.id
 
-type 'a handler = 'a Httpcats.handler
-type response = Httpcats.response
-type error = Httpcats.error
+type 'a handler = 'a Httpcats_core.handler
+type response = Httpcats_core.response
+type error = Httpcats_core.error
 
-let request ~fn a t = keval t @@ fun uri -> Httpcats.request ~fn ~uri a
+(* TODO *)
+(* let request ~fn a t = keval t @@ fun uri -> Httpcats.request ~fn ~uri a *)

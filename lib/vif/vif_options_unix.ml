@@ -14,7 +14,7 @@ let setup_config domains' port' inet_addr' backlog' pid' =
 
 let config_from_globals () =
   let sockaddr = Unix.(ADDR_INET (!inet_addr, !port)) in
-  Vif_config.config ?domains:!domains ?pid:!pid ~backlog:!backlog sockaddr
+  Vif_config_unix.config ?domains:!domains ?pid:!pid ~backlog:!backlog sockaddr
 
 open Cmdliner
 

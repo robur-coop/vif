@@ -1,54 +1,60 @@
 let src = Logs.Src.create "vif"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Json = Json
+module Json = Vif_core.Json
 
 module Uri = struct
-  include Vif_uri
+  include Vif_core.Uri
 
   let int =
     let prj = int_of_string and inj = string_of_int in
-    Tyre.(conv prj inj (regex Vif_route.Ext.arbitrary_int))
+    Tyre.(conv prj inj (regex Vif_core.Route.Ext.arbitrary_int))
 
-  let string c = Tyre.regex (Vif_route.Ext.string c)
+  let string c = Tyre.regex (Vif_core.Route.Ext.string c)
   let rest = Tyre.regex Re.(rep1 any)
   let path = Tyre.regex Re.(rep1 (compl [ char '?' ]))
 
   let bool =
     let prj = function "true" -> true | _ -> false
     and inj x = if x then "true" else "false" in
-    Tyre.(conv prj inj (regex Vif_route.Ext.bool))
+    Tyre.(conv prj inj (regex Vif_core.Route.Ext.bool))
 
   let float =
     let prj = float_of_string and inj = string_of_float in
-    Tyre.(conv prj inj (regex Vif_route.Ext.float))
+    Tyre.(conv prj inj (regex Vif_core.Route.Ext.float))
 
   let option = Tyre.opt
   let conv = Tyre.conv
 
   let execp uri s =
-    let re = Vif_route.get_re uri in
+    let re = Vif_core.Route.get_re uri in
     Re.execp (Re.compile (Re.whole_string re)) s
 
   let extract uri s f =
-    let _i'dunno, re_url, re = Vif_route.re_url 1 uri in
+    let _i'dunno, re_url, re = Vif_core.Route.re_url 1 uri in
     let id, re = Re.mark re in
     let subs = Re.exec_opt (Re.compile (Re.whole_string re)) s in
     match subs with
     | Some subs ->
         if Re.Mark.test subs id then
-          try Ok (Vif_route.extract_url ~original:s re_url subs f)
-          with Vif_route.Tyre_exn exn -> Error (`Converter_failure exn)
+          try Ok (Vif_core.Route.extract_url ~original:s re_url subs f)
+          with Vif_core.Route.Tyre_exn exn -> Error (`Converter_failure exn)
         else Error `No_match
     | None -> Error `No_match
 end
 
 module Route = struct
-  include Vif_route
-  open Vif_type
+  include Vif_core.Route
+
+  type nonrec 'r t = (Httpcats.Server.flow, 'r) t
+
+  open Vif_core.Type
 
   type ('fu, 'return) route =
-    | Handler : ('f, 'x) Vif_route.req * ('x, 'r) Vif_uri.t -> ('f, 'r) route
+    | Handler :
+        (Httpcats.Server.flow, 'f, 'x) Vif_core.Route.req
+        * ('x, 'r) Vif_core.Uri.t
+        -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
   let head t = Handler (Request (Some `HEAD, Null), t)
@@ -59,72 +65,86 @@ module Route = struct
   let ( --> ) = route
 end
 
-module Client = Vif_client
-module Device = Vif_device
-module Server = Vif_server
-module Middleware = Vif_middleware
-module Queries = Vif_queries
+module Client = Vif_client_unix
+module Device = Vif_core.Device
+module Server = Vif_core.Server
+
+module Middleware = struct
+  include Vif_core.Middleware
+
+  type nonrec ('cfg, 'v) t = (Httpcats.Server.flow, 'cfg, 'v) t
+end
+
+module Queries = Vif_core.Queries
 
 module Devices = struct
   type 'value t =
     | [] : 'value t
     | ( :: ) : ('value, 'a) Device.device * 'value t -> 'value t
 
-  let run : Vif_device.Hmap.t -> 'value t -> 'value -> Vif_device.Hmap.t =
+  let run :
+      Vif_core.Device.Hmap.t -> 'value t -> 'value -> Vif_core.Device.Hmap.t =
    fun t lst user's_value ->
     let rec go t = function
       | [] -> t
-      | x :: r -> go (Vif_device.run t user's_value x) r
+      | x :: r -> go (Vif_core.Device.run t user's_value x) r
     in
     go t lst
 
-  let finally : Vif_device.t -> unit =
+  let finally : Vif_core.Device.t -> unit =
    fun t ->
-    let[@warning "-8"] (Vif_device.Devices m) = t in
-    let fn (Vif_device.Hmap.B (k, v)) =
-      let { Vif_device.Device.finally; _ } = Vif_device.Hmap.Key.info k in
+    let[@warning "-8"] (Vif_core.Device.Devices m) = t in
+    let fn (Vif_core.Device.Hmap.B (k, v)) =
+      let { Vif_core.Device.Device.finally; _ } =
+        Vif_core.Device.Hmap.Key.info k
+      in
       finally v
     in
-    Vif_device.Hmap.iter fn m
+    Vif_core.Device.Hmap.iter fn m
 end
 
 module Middlewares = struct
   type 'cfg t =
     | [] : 'cfg t
-    | ( :: ) : ('cfg, 'a) Vif_middleware.t * 'cfg t -> 'cfg t
+    | ( :: ) :
+        (Httpcats.Server.flow, 'cfg, 'a) Vif_core.Middleware.t * 'cfg t
+        -> 'cfg t
 
-  type ('cfg, 'v) fn = ('cfg, 'v) Vif_middleware.fn
+  type ('cfg, 'v) fn = (Httpcats.Server.flow, 'cfg, 'v) Vif_core.Middleware.fn
 
-  let v = Vif_middleware.v
+  let v = Vif_core.Middleware.v
 
   type ('value, 'a, 'c) ctx = {
-      server: Vif_server.t
-    ; request: Vif_request0.t
+      server: Vif_core.Server.t
+    ; request: Httpcats.Server.flow Vif_core.Request0.t
     ; target: string
     ; user's_value: 'value
   }
 
   let rec run : type v.
-      v t -> (v, 'a, 'c) ctx -> Vif_middleware.Hmap.t -> Vif_middleware.Hmap.t =
+         v t
+      -> (v, 'a, 'c) ctx
+      -> Vif_core.Middleware.Hmap.t
+      -> Vif_core.Middleware.Hmap.t =
    fun lst ctx env ->
     match lst with
     | [] -> env
     | Middleware (fn, key) :: r -> begin
         match fn ctx.request ctx.target ctx.server ctx.user's_value with
-        | Some value -> run r ctx (Vif_middleware.Hmap.add key value env)
+        | Some value -> run r ctx (Vif_core.Middleware.Hmap.add key value env)
         | None -> run r ctx env
         | exception _exn -> run r ctx env
       end
 end
 
-module Type = Vif_type
-module Stream = Vif_stream
-module Method = Vif_method
-module Status = Vif_status
-module Headers = Vif_headers
+module Type = Vif_core.Type
+module Stream = Vif_core.Stream
+module Method = Vif_core.Method
+module Status = Vif_core.Status
+module Headers = Vif_core.Headers
 
 module Response = struct
-  include Vif_response
+  include Vif_core.Response
 
   let mime_type path =
     let default = "application/octet-stream" in
@@ -138,15 +158,16 @@ module Response = struct
       Sys.file_exists (Fpath.to_string path) = false
       || Sys.is_directory (Fpath.to_string path)
     then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
-    if Vif_handler.cached_on_client_side req path then
+    if Vif_handler_unix.cached_on_client_side req path then
       let* () = with_string req "" in
       respond `Not_modified
     else
       let mime = Option.value ~default:(mime_type path) mime in
-      let src = Vif_stream.Source.file (Fpath.to_string path) in
+      let src = Vif_handler_unix.file (Fpath.to_string path) in
       let field = "connection" in
       let* () =
-        if Vif_request.version req = 1 then add ~field "close" else return ()
+        if Vif_core.Request.version req = 1 then add ~field "close"
+        else return ()
       in
       let field = "content-type" in
       let* () = add ~field mime in
@@ -157,7 +178,9 @@ module Response = struct
       let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
       let field = "etag" in
       let etag =
-        match etag with None -> Vif_handler.sha256sum path | Some etag -> etag
+        match etag with
+        | None -> Vif_handler_unix.sha256sum path
+        | Some etag -> etag
       in
       let* () = add ~field etag in
       let* () = with_source req src in
@@ -176,8 +199,12 @@ module Response = struct
   end
 end
 
-module Cookie = Vif_cookie
-module Handler = Vif_handler
+module Cookie = Vif_core.Cookie
+
+module Handler = struct
+  include Vif_core.Handler
+  include Vif_handler_unix
+end
 
 let is_application_json { Multipart_form.Content_type.ty; subty; _ } =
   match (ty, subty) with `Application, `Iana_token "json" -> true | _ -> false
@@ -188,60 +215,62 @@ let is_multipart_form_data { Multipart_form.Content_type.ty; subty; _ } =
   | _ -> false
 
 let content_type req0 =
-  let headers = Vif_request0.headers req0 in
-  let c = Vif_headers.get headers "content-type" in
+  let headers = Vif_core.Request0.headers req0 in
+  let c = Vif_core.Headers.get headers "content-type" in
   let c = Option.map (fun c -> c ^ "\r\n") c in
   let c = Option.to_result ~none:`Not_found c in
   Result.bind c Multipart_form.Content_type.of_string
 
 let recognize_request ~env req0 =
   let extract : type c a.
-      Vif_method.t option -> (c, a) Vif_type.t -> (c, a) Vif_request.t option =
+         Vif_core.Method.t option
+      -> (c, a) Vif_core.Type.t
+      -> (Httpcats.Server.flow, c, a) Vif_core.Request.t option =
    fun meth c ->
     let none = true in
-    let some = ( = ) (Vif_request0.meth req0) in
+    let some = ( = ) (Vif_core.Request0.meth req0) in
     let meth_match = Option.fold ~none ~some meth in
     Log.debug (fun m -> m "method matches? %b" meth_match);
     match c with
-    | Vif_type.Any as encoding ->
-        if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
+    | Vif_core.Type.Any as encoding ->
+        if meth_match then Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
     | Null as encoding ->
-        if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
+        if meth_match then Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
     | Json_encoding _ as encoding ->
         let c = content_type req0 in
         let type_match = Result.map is_application_json c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
-          Some (Vif_request.of_req0 ~encoding ~env req0)
+          Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
     | Multipart_form_encoding _ as encoding ->
         let c = content_type req0 in
         let type_match = Result.map is_multipart_form_data c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
-          Some (Vif_request.of_req0 ~encoding ~env req0)
+          Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
     | Json as encoding ->
         let c = content_type req0 in
         let type_match = Result.map is_application_json c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
-          Some (Vif_request.of_req0 ~encoding ~env req0)
+          Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
     | Multipart_form as encoding ->
         let c = content_type req0 in
         let type_match = Result.map is_multipart_form_data c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
-          Some (Vif_request.of_req0 ~encoding ~env req0)
+          Some (Vif_core.Request.of_req0 ~encoding ~env req0)
         else None
   in
-  { Vif_route.extract }
+  { Vif_core.Route.extract }
 
 module Multipart_form = struct
-  open Vif_stream
+  open Vif_core.Stream
 
   type 'id multipart_form_context = {
       queue: event Queue.t
@@ -293,9 +322,9 @@ module Multipart_form = struct
 
   let multipart_form req :
       (string, Multipart_form.Header.t * string source) flow =
-    let hdrs = Vif_request.headers req in
+    let hdrs = Vif_core.Request.headers req in
     let content_type =
-      match Vif_headers.get hdrs "content-type" with
+      match Vif_core.Headers.get hdrs "content-type" with
       | None -> Fmt.invalid_arg "Content-type field missing"
       | Some str ->
           Multipart_form.Content_type.of_string (str ^ "\r\n") |> Result.get_ok
@@ -364,7 +393,7 @@ module Multipart_form = struct
     in
     { flow }
 
-  include Vif_multipart_form
+  include Vif_core.Multipart_form
 
   type part = meta = {
       name: string option
@@ -408,7 +437,7 @@ module Multipart_form = struct
     (hdrs, meta)
 
   let parse req =
-    let from = Vif_request.source req in
+    let from = Vif_core.Request.source req in
     try
       let lst, src =
         Stream.run ~from
@@ -430,16 +459,22 @@ module Multipart_form = struct
       let _hdrs, meta = aggregate hdrs in
       (meta, src)
     in
-    Stream.from (Vif_request.source req)
+    Stream.from (Vif_core.Request.source req)
     |> Stream.via (multipart_form req)
     |> Stream.map fn
 end
 
 module Request = struct
-  include Vif_request
+  include Vif_core.Request
+
+  type nonrec ('c, 'a) t = (Httpcats.Server.flow, 'c, 'a) t
+  type nonrec request = Httpcats.Server.flow request
 
   let of_multipart_form : type a.
-         (Vif_type.multipart_form, a) Vif_request.t
+         ( Httpcats.Server.flow
+         , Vif_core.Type.multipart_form
+         , a )
+         Vif_core.Request.t
       -> (a, [> `Invalid_multipart_form | `Not_found of string ]) result =
     function
     | { encoding= Multipart_form_encoding r; _ } as req ->
@@ -467,23 +502,27 @@ type 'value daemon = {
   ; orphans: unit Miou.orphans
   ; condition: Miou.Condition.t
   ; user's_value: 'value
-  ; server: Vif_server.t
+  ; server: Vif_core.Server.t
 }
 
 and 'value user's_function =
-  | User's_request : Vif_request0.t * 'value fn -> 'value user's_function
+  | User's_request :
+      Httpcats.Server.flow Vif_core.Request0.t * 'value fn
+      -> 'value user's_function
   | User's_websocket : 'value ws -> 'value user's_function
 
 and 'value fn =
-  Vif_server.t -> 'value -> (Response.empty, Response.sent, unit) Vif_response.t
+     Vif_core.Server.t
+  -> 'value
+  -> (Response.empty, Response.sent, unit) Vif_core.Response.t
 
-and 'value ws = Vif_server.t -> 'value -> unit
+and 'value ws = Vif_core.Server.t -> 'value -> unit
 
 let to_ctx daemon req0 =
   {
     Middlewares.server= daemon.server
   ; Middlewares.request= req0
-  ; Middlewares.target= Vif_request0.target req0
+  ; Middlewares.target= Vif_core.Request0.target req0
   ; Middlewares.user's_value= daemon.user's_value
   }
 
@@ -517,17 +556,18 @@ let rec user's_functions daemon =
         let fn () = fn daemon.server daemon.user's_value in
         ignore (Miou.async ~orphans:daemon.orphans fn)
     | User's_request (req0, fn) ->
-        let src = Vif_request0.src req0 in
+        let src = Vif_core.Request0.src req0 in
         Logs.debug ~src (fun m -> m "new user's request handler");
+        let now () = Int32.of_float (Unix.gettimeofday ()) in
         let fn () =
           try
             Logs.debug ~src (fun m -> m "run user's request handler");
-            let Vif_response.Sent, () =
-              Vif_response.(run req0 Empty)
+            let Vif_core.Response.Sent, () =
+              Vif_core.Response.(run ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
             Logs.debug ~src (fun m -> m "user's request handler terminated");
-            Vif_request0.close req0
+            Vif_core.Request0.close req0
           with exn ->
             let bt = Printexc.get_raw_backtrace () in
             Logs.err ~src (fun m ->
@@ -535,7 +575,7 @@ let rec user's_functions daemon =
                   (Printexc.to_string exn));
             Logs.err ~src (fun m ->
                 m "%s" (Printexc.raw_backtrace_to_string bt));
-            Vif_request0.report_exn req0 exn
+            Vif_core.Request0.report_exn req0 exn
         in
         ignore (Miou.async ~orphans:daemon.orphans fn)
   in
@@ -545,12 +585,12 @@ let handler ~default ~middlewares routes daemon =
   ();
   let dispatch = Route.dispatch ~default routes in
   fun socket reqd ->
-    let req0 = Vif_request0.of_reqd socket reqd in
+    let req0 = Vif_core.Request0.of_reqd socket reqd in
     let ctx = to_ctx daemon req0 in
-    let env = Middlewares.run middlewares ctx Vif_middleware.Hmap.empty in
+    let env = Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty in
     let request = recognize_request ~env req0 in
-    let target = Vif_request0.target req0 in
-    let meth = Vif_request0.meth req0 in
+    let target = Vif_core.Request0.target req0 in
+    let meth = Vif_core.Request0.meth req0 in
     try
       let fn = dispatch ~meth ~request ~target in
       (* NOTE(dinosaure): the management of the http request must finish and above
@@ -581,10 +621,10 @@ let ws_handler daemon fn ?stop flow =
   Log.debug (fun m -> m "Start to upgrade a connection to websocket");
   Httpcats.Server.Websocket.upgrade ?stop ~fn flow
 
-type config = Vif_config.config
+type config = Vif_config_unix.config
 
 let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
-let config = Vif_config.config
+let config = Vif_config_unix.config
 
 let process stop cfg server user's_value ready (fn, ws_fn) =
   Logs.debug (fun m ->
@@ -606,7 +646,7 @@ let process stop cfg server user's_value ready (fn, ws_fn) =
      of in parallel) with the task managing the new http connection. [httpcats]
      is therefore instructed to launch the task managing the http connection on
      the same domain as the [process] domain. *)
-  match (cfg.Vif_config.http, cfg.Vif_config.tls) with
+  match (cfg.Vif_config_unix.http, cfg.Vif_config_unix.tls) with
   | config, Some tls ->
       let upgrade flow = ws_handler daemon ws_fn (`Tls flow) in
       Httpcats.Server.with_tls ~parallel ~upgrade ?stop ?config
@@ -647,19 +687,19 @@ let default req target _server _user's_value =
     Fmt.pf ppf "%s: @[<hov>%a@]%!" k Fmt.(list ~sep:(any "@ ") string) v
   in
   let str =
-    Fmt.str "Unspecified destination %s (%a):\n%a\n" target Vif_method.pp
-      (Vif_request.meth req)
+    Fmt.str "Unspecified destination %s (%a):\n%a\n" target Vif_core.Method.pp
+      (Vif_core.Request.meth req)
       Fmt.(list ~sep:(any "\n") pp_field)
-      (Vif_request.headers req)
+      (Vif_core.Request.headers req)
   in
   let len = String.length str in
   let field = "content-type" in
   let open Response.Syntax in
-  let* () = Vif_response.add ~field "text/plain; charset=utf-8" in
+  let* () = Vif_core.Response.add ~field "text/plain; charset=utf-8" in
   let field = "content-length" in
-  let* () = Vif_response.add ~field (string_of_int len) in
-  let* () = Vif_response.with_string req str in
-  Vif_response.respond `Not_found
+  let* () = Vif_core.Response.add ~field (string_of_int len) in
+  let* () = Vif_core.Response.with_string req str in
+  Vif_core.Response.respond `Not_found
 
 let default_from_handlers handlers req target server user's_value =
   let fn acc handler =
@@ -671,7 +711,7 @@ let default_from_handlers handlers req target server user's_value =
   | Some p -> p
   | None -> default req target server user's_value
 
-let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
+let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
     ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
     user's_value =
   let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
@@ -693,9 +733,11 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
     | false -> None
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
-  let devices = Devices.run Vif_device.Hmap.empty devices user's_value in
+  let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
-  let server = { Vif_server.devices; cookie_key= cfg.Vif_config.cookie_key } in
+  let server =
+    { Vif_core.Server.devices; cookie_key= cfg.Vif_config_unix.cookie_key }
+  in
   let default = default_from_handlers handlers in
   let websocket =
     match websocket with
@@ -733,7 +775,7 @@ let run ?(cfg = Vif_options.config_from_globals ()) ?(devices = Devices.[])
   Miou.await_exn prm0;
   Miou.await_exn prm1;
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
-  Devices.finally (Vif_device.Devices devices);
+  Devices.finally (Vif_core.Device.Devices devices);
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
-let setup_config = Vif_options.setup_config
+let setup_config = Vif_options_unix.setup_config
