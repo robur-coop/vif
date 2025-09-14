@@ -12,6 +12,7 @@ module Ext = struct
   let slash = Re.char '/'
   let comma = Re.char ','
   let amper = Re.char '&'
+  let question_mark = Re.char '?'
 
   (** -?[0-9]+( .[0-9]* )? *)
   let float =
@@ -32,7 +33,7 @@ module Ext = struct
   let string component =
     let open Re in
     match component with
-    | `Path -> rep1 @@ compl [ slash ]
+    | `Path -> rep1 @@ compl [ slash; question_mark ]
     | `Query_value -> rep1 @@ compl [ set "&;+," ]
 
   (** Separated by , or by / *)
