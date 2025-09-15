@@ -1,0 +1,16 @@
+(ocamllex vif_mmeta_lexer)
+
+(library
+ (name vif_mmeta)
+ (modules vif_mmeta vif_mmeta_lexer objinfo digest modname unitname)
+ (public_name vif.mmeta)
+ (modes native)
+ (libraries
+  compiler-libs
+  compiler-libs.common
+  fmt
+  bos
+  logs
+  unix
+  fpath
+  cmdliner))

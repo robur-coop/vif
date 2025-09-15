@@ -147,7 +147,7 @@ let raise_parser_error lexbuf fmt =
     p.Lexing.pos_fname p.Lexing.pos_lnum c
 
 let pp_token ppf = function
-  | Vif_meta_lexer.Name name -> Format.pp_print_string ppf name
+  | Vif_mmeta_lexer.Name name -> Format.pp_print_string ppf name
   | String str -> Format.fprintf ppf "%S" str
   | Minus -> Format.pp_print_string ppf "-"
   | Lparen -> Format.pp_print_string ppf "("
@@ -161,25 +161,25 @@ let invalid_token lexbuf token =
   raise_parser_error lexbuf "Invalid token %a" pp_token token
 
 let lparen lexbuf =
-  match Vif_meta_lexer.token lexbuf with
+  match Vif_mmeta_lexer.token lexbuf with
   | Lparen -> ()
   | token -> invalid_token lexbuf token
 
 let name lexbuf =
-  match Vif_meta_lexer.token lexbuf with
+  match Vif_mmeta_lexer.token lexbuf with
   | Name name -> name
   | token -> invalid_token lexbuf token
 
 let string lexbuf =
-  match Vif_meta_lexer.token lexbuf with
+  match Vif_mmeta_lexer.token lexbuf with
   | String str -> str
   | token -> invalid_token lexbuf token
 
 let rec predicates lexbuf acc =
-  match Vif_meta_lexer.token lexbuf with
+  match Vif_mmeta_lexer.token lexbuf with
   | Rparen -> List.rev acc
   | Name predicate -> begin
-      match Vif_meta_lexer.token lexbuf with
+      match Vif_mmeta_lexer.token lexbuf with
       | Comma -> predicates lexbuf (Include predicate :: acc)
       | Rparen -> List.rev (Include predicate :: acc)
       | token -> invalid_token lexbuf token
@@ -187,7 +187,7 @@ let rec predicates lexbuf acc =
   | Minus ->
       let predicate = name lexbuf in
       begin
-        match Vif_meta_lexer.token lexbuf with
+        match Vif_mmeta_lexer.token lexbuf with
         | Comma -> predicates lexbuf (Exclude predicate :: acc)
         | Rparen -> List.rev (Exclude predicate :: acc)
         | token -> invalid_token lexbuf token
@@ -195,7 +195,7 @@ let rec predicates lexbuf acc =
   | token -> invalid_token lexbuf token
 
 let rec parser lexbuf depth acc =
-  match Vif_meta_lexer.token lexbuf with
+  match Vif_mmeta_lexer.token lexbuf with
   | Rparen when depth > 0 -> List.rev acc
   | Rparen ->
       raise_parser_error lexbuf
@@ -203,7 +203,7 @@ let rec parser lexbuf depth acc =
   | Eof when depth = 0 -> List.rev acc
   | Eof -> raise_parser_error lexbuf "%d closing parenthesis missing" depth
   | Name name -> begin
-      match Vif_meta_lexer.token lexbuf with
+      match Vif_mmeta_lexer.token lexbuf with
       | String value ->
           lparen lexbuf;
           let contents = parser lexbuf (succ depth) [] in
@@ -217,7 +217,7 @@ let rec parser lexbuf depth acc =
       | Lparen ->
           let predicates = predicates lexbuf [] in
           begin
-            match Vif_meta_lexer.token lexbuf with
+            match Vif_mmeta_lexer.token lexbuf with
             | Equal ->
                 let value = string lexbuf in
                 parser lexbuf depth (Set { name; predicates; value } :: acc)
@@ -233,7 +233,7 @@ let rec parser lexbuf depth acc =
 let parser lexbuf =
   try Ok (parser lexbuf 0 []) with
   | Parser_error err -> Error (`Msg err)
-  | Vif_meta_lexer.Lexical_error (msg, f, l, c) ->
+  | Vif_mmeta_lexer.Lexical_error (msg, f, l, c) ->
       error_msgf "%s at l.%d, c.%d: %s" f l c msg
 
 let parser path =

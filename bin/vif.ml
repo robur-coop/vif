@@ -169,7 +169,7 @@ let term =
   const run
   $ setup_logs
   $ Vif.setup_config
-  $ Vif_meta.setup
+  $ Vif_mmeta.setup
   $ setup_stdlib
   $ main
 
