@@ -102,6 +102,14 @@ let with_string ?compression:alg req str =
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   String str
 
+let with_text ?(utf_8 = true) ?compression req str =
+  let field = "content-type" in
+  let* () =
+    if utf_8 then add ~field "text/plain; charset=utf-8"
+    else add ~field "text/plain"
+  in
+  with_string ?compression req str
+
 let with_tyxml ?compression:alg req tyxml =
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in

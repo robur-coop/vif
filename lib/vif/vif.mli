@@ -899,6 +899,13 @@ module Response : sig
     -> string
     -> (empty, filled, unit) t
 
+  val with_text :
+       ?utf_8:bool
+    -> ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> string
+    -> (empty, filled, unit) t
+
   val with_file :
        ?mime:string
     -> ?compression:[> `DEFLATE | `Gzip ]
