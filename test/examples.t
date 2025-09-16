@@ -84,3 +84,4 @@ raises an exception through `int_of_string`!
   Don't look a horse in the mouth.
   No match.
   `Converter failure: Invalid_argument("not a mouth")
+  /horse?q=mouth&q=hoofs
