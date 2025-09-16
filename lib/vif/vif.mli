@@ -223,56 +223,65 @@ module Uri : sig
   val ( /% ) : ('f, 'a -> 'r) path -> 'a atom -> ('f, 'r) path
   (** [p /% v] operator extends a given path [p] with a new {!type:atom} [v]. *)
 
-  type ('f, 'r) query
+  type nil = unit
+  type any = (string * string list) list
+  type ('f, 'o, 'r) query
   (** Type of the query part of an URI. *)
 
-  val nil : ('r, 'r) query
+  val nil : ('r, nil, 'r) query
   (** [nil] specifies that the URI has no parameters. If the URI is used to
       specify a route, this means that a request with even one parameter would
       {b not} be recognised with [nil]. If you want to recognise a URI with
       possible parameters, we recommend using {!val:any}. *)
 
-  val any : ('r, 'r) query
+  val any : ('r, any, 'r) query
   (** [any] specifies that a URI can have no parameters or multiple parameters.
       It is usually [any] that is preferred to {!val:nil} in the specification
       of a route. *)
 
-  val ( ** ) : string * 'a atom -> ('f, 'r) query -> ('a -> 'f, 'r) query
+  val ( ** ) : string * 'a atom -> ('f, 'o, 'r) query -> ('a -> 'f, 'o, 'r) query
   (** [q ** ("foo", v)] is an operator that allows you to add a new parameter
       ["foo"] with a value whose type is specified by [v] to the list of given
       parameters [q]. *)
 
-  type ('f, 'r) t
+  type ('f, 'o, 'r) t
   (** Type of an URI. *)
 
-  val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( /? ) : ('f, 'x) path -> ('x, 'o, 'r) query -> ('f, 'o, 'r) t
   (** [path /? queries] is an operator which permits to construct an URI where
       the slash at the end of the given path [path] is not required (to delimit
       queries then). *)
 
-  val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( //? ) : ('f, 'x) path -> ('x, 'o, 'r) query -> ('f, 'o, 'r) t
   (** [path //? queries] is an operator which permits to construct an URI where
       the slash at theend of the given path [path] {b is required} and delimit
       queries then. *)
 
-  val ( /?? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( /?? ) : ('f, 'x) path -> ('x, 'o, 'r) query -> ('f, 'o, 'r) t
   (** [path /?? queries] is an operator which permits to construct an URI where
       the slash is {b optionnal} between the given path [path] and queries. *)
 
-  val keval : ?slash:bool -> ('f, 'r) t -> (string -> 'r) -> 'f
+  val keval : ?slash:bool -> ('f, 'o, 'r) t -> (string -> 'r) -> 'f
   (** [keval ?slash uri fn] compiles an URI [uri] into a [string] and pass it to
       [fn]. *)
 
-  val eval : ?slash:bool -> ('f, string) t -> 'f
+  val eval : ?slash:bool -> ('f, 'o, string) t -> 'f
   (** [eval ?slash uri] compiles an URI [uri] into a [string]. *)
 
-  val execp : (_, _) t -> string -> bool
+  val keval_additional_queries : ?slash:bool -> ('f, any, 'r) t -> (string * string list) list -> (string -> 'r) -> 'f
+  (** [keval_additional_queries ?slash uri additional_queries fn] compiles an URI [uri] into a [string] and pass it to
+      [fn]. *)
+
+  val eval_additional_queries : ?slash:bool -> ('f, any, string) t -> (string * string list) list -> 'f
+  (** [eval_additional_queries ?slash uri additional_queries] compiles an URI [uri] into a [string]. *)
+
+  val execp : (_, _, _) t -> string -> bool
   (** [execp uri str] tests if [str] matches the regular expression for [uri].
       Note that even if [execp uri str] is [true] the converters of [uri] may
       fail. *)
 
   val extract :
-       ('f, 'r) t
+       ('f, _, 'r) t
     -> string
     -> 'f
     -> ('r, [ `Converter_failure of exn | `No_match ]) result
@@ -584,23 +593,23 @@ module Route : sig
   type 'r t
   type ('fu, 'return) route
 
-  val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val get : ('x, _, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [get uri] describes a route which matches a [GET] request with the given
       path [uri]. a [GET] request does not have any contents. *)
 
-  val head : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val head : ('x, _, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [head uri] describes a route which matches a [HEAD] request with the given
       path [uri]. A [HEAD] request does not have any contents. *)
 
-  val delete : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val delete : ('x, _, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [delete uri] describes a route which matches a [DELETE] request with the
       given path [uri]. A [DELETE] request does not have any contents. *)
 
   val post :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+    ('c, 'a) Type.t -> ('x, _, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val put :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+    ('c, 'a) Type.t -> ('x, _, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
   (** [r --> f] associates a route [r] to a handler [f]. *)
@@ -627,7 +636,7 @@ module Client : sig
     -> ?max_redirect:int
     -> ?follow_redirect:bool
     -> ?resolver:resolver
-    -> ('a, response) Uri.t
+    -> ('a, _, response) Uri.t
     -> 'a
 
   (** {3:example-client Examples.}
@@ -962,10 +971,17 @@ module Response : sig
   val redirect_to :
        ?with_get:bool
     -> ('c, 'a) Request.t
-    -> ('r, (filled, sent, unit) t) Uri.t
+    -> ('r, _, (filled, sent, unit) t) Uri.t
     -> 'r
   (** [redirect_to ?with_get req uri] responds a redirection to [uri] to the
       client. *)
+
+  val redirect_to_additional_queries :
+    ?with_get:bool
+    -> ('c, 'a) Request.t
+    -> ('r, Uri.any, (filled, sent, unit) t) Uri.t
+    -> (string * string list) list
+    -> 'r
 
   (** Headers manipulation. *)
 

@@ -12,13 +12,16 @@ type ('fu, 'return) path =
   | Path_const : ('f, 'r) path * string -> ('f, 'r) path
   | Path_atom : ('f, 'a -> 'r) path * 'a atom -> ('f, 'r) path
 
-type ('fu, 'return) query =
-  | Nil : ('r, 'r) query
-  | Any : ('r, 'r) query
-  | Query_atom : string * 'a atom * ('f, 'r) query -> ('a -> 'f, 'r) query
+type nil = unit
+type any = (string * string list) list
+
+type ('fu, 'open_, 'return) query =
+  | Nil : ('r, unit, 'r) query
+  | Any : ('r, any,'r) query
+  | Query_atom : string * 'a atom * ('f, 'open_, 'r) query -> ('a -> 'f, 'open_, 'r) query
 
 type slash = Slash | No_slash | Maybe_slash
-type ('f, 'r) t = Url : slash * ('f, 'x) path * ('x, 'r) query -> ('f, 'r) t
+type ('f, 'open_, 'r) t = Url : slash * ('f, 'x) path * ('x, 'open_, 'r) query -> ('f, 'open_, 'r) t
 
 module Path = struct
   let host str = Host str
@@ -36,21 +39,23 @@ module Path = struct
 end
 
 module Query = struct
-  let nil : _ query = Nil
+  let nil : (_, nil, _) query = Nil
   let any = Any
   let add n x query = Query_atom (n, x, query)
 
-  let rec make_any : type f r. (f, r) query -> (f, r) query = function
+  let rec make_any : type f o r. (f, o, r) query -> (f, any, r) query = function
     | Nil -> Any
     | Any -> Any
     | Query_atom (n, x, q) -> Query_atom (n, x, make_any q)
 
-  let rec _concat : type f r x. (f, x) query -> (x, r) query -> (f, r) query =
+  (*
+  let rec _concat : type f o o' r x. (f, o, x) query -> (x, o', r) query -> (f, o', r) query =
    fun q1 q2 ->
     match q1 with
     | Nil -> q2
     | Any -> make_any q2
     | Query_atom (n, x, q) -> Query_atom (n, x, _concat q q2)
+     *)
 end
 
 module Url = struct
@@ -85,21 +90,21 @@ let rec eval_path : type r f.
       let fn h r x = k h (eval_top_atom (Tyre.Internal.from_t a) x @ r) in
       eval_path p fn
 
-let rec eval_query : type r f.
-    (f, r) query -> ((string * string list) list -> r) -> f =
- fun q k ->
-  match q with
-  | Nil -> k []
-  | Any -> k []
-  | Query_atom (n, a, q) ->
+let rec eval_query : type r o f.
+    (f, o, r) query -> o -> ((string * string list) list -> r) -> f =
+ fun q additional_queries k ->
+  match q, additional_queries with
+  | Nil, () -> k []
+  | Any, additional_queries -> k additional_queries
+  | Query_atom (n, a, q), additional_queries ->
       fun x ->
         let fn r = k ((n, eval_top_atom (Tyre.Internal.from_t a) x) :: r) in
-        eval_query q fn
+        eval_query q additional_queries fn
 
-let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
- fun ?slash:(force = false) (Url (slash, p, q)) k ->
+let keval_additional_queries : ?slash:bool -> ('a, 'o, 'b) t -> 'o -> (string -> 'b) -> 'a =
+ fun ?slash:(force = false) (Url (slash, p, q)) additional_queries k ->
   eval_path p @@ fun host path ->
-  eval_query q @@ fun query ->
+  eval_query q additional_queries @@ fun query ->
   let path =
     match slash with Slash -> "" :: path | No_slash | Maybe_slash -> path
   in
@@ -115,7 +120,21 @@ let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
   let query = Pct.encode_query query in
   k (host ^ path ^ query)
 
-let eval ?slash t = keval ?slash t Fun.id
+let eval_additional_queries ?slash t additional_queries = keval_additional_queries ?slash t additional_queries Fun.id
+
+let no_additional_queries : type o. (_, o, _) t -> o =
+  fun (Url (_, _, q)) ->
+  let rec queries : type f o r. (f, o, r) query -> o = function
+    | Any -> []
+    | Nil -> ()
+    | Query_atom (_, _, q) -> queries q
+  in
+  queries q
+
+let keval ?slash t k =
+  keval_additional_queries ?slash t (no_additional_queries t) k
+and eval ?slash t =
+  eval_additional_queries ?slash t (no_additional_queries t)
 
 type 'a handler = 'a Httpcats.handler
 type response = Httpcats.response

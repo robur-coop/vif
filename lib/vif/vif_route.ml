@@ -148,8 +148,8 @@ type ('fu, 'ret) re_query =
   | Any : ('r, 'r) re_query
   | Cons : 'a re_atom * ('f, 'r) re_query -> ('a -> 'f, 'r) re_query
 
-let rec collect_re_query : type r f.
-       (f, r) Vif_uri.query
+let rec collect_re_query : type r o f.
+       (f, o, r) Vif_uri.query
     -> int * (f, r) re_query * bool * (string * (Re.t * int)) list = function
   | Nil -> (0, Nil, false, [])
   | Any -> (0, Any, true, [])
@@ -188,7 +188,7 @@ let re_query current_idx q =
 type ('f, 'r) re_url =
   | ReUrl : ('f, 'x) re_path * ('x, 'r) re_query -> ('f, 'r) re_url
 
-let re_url : type f r. int -> (f, r) Vif_uri.t -> int * (f, r) re_url * Re.t =
+let re_url : type f o r. int -> (f, o, r) Vif_uri.t -> int * (f, r) re_url * Re.t =
  fun i -> function
   | Url (slash, p, q) -> (
       let end_path =
@@ -287,7 +287,7 @@ type ('fu, 'return) req =
       Vif_method.t option * ('c, 'a) Vif_type.t
       -> (('c, 'a) Vif_request.t -> 'r, 'r) req
 
-type 'r t = Route : ('f, 'x) req * ('x, 'r) Vif_uri.t * 'f -> 'r t
+type 'r t = Route : ('f, 'x) req * ('x, 'o, 'r) Vif_uri.t * 'f -> 'r t
 
 let route req t f = Route (req, t, f)
 

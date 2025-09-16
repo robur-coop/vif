@@ -37,7 +37,7 @@ let rem ~field = Rem_header field
 let ( let* ) = bind
 let strf fmt = Format.asprintf fmt
 
-let redirect_to ?(with_get = true) req uri =
+let redirect_to ?(with_get = true) req uri additional_queries =
   let fn rel =
     let* _ = add_unless_exists ~field:"location" rel in
     match (Vif_request.meth req, with_get) with
@@ -45,7 +45,12 @@ let redirect_to ?(with_get = true) req uri =
     | _, true (* XXX-to-GET *) -> Respond `See_other
     | _, false (* XXX-to-XXX *) -> Respond `Temporary_redirect
   in
-  Vif_uri.keval ~slash:true uri fn
+  Vif_uri.keval_additional_queries ~slash:true uri additional_queries fn
+
+let redirect_to_additional_queries ?with_get req uri additional_queries =
+  redirect_to ?with_get req uri additional_queries
+and redirect_to ?with_get req uri =
+  redirect_to ?with_get req uri (Vif_uri.no_additional_queries uri)
 
 module Hdrs = Vif_headers
 

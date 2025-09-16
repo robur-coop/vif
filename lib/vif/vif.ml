@@ -48,7 +48,7 @@ module Route = struct
   open Vif_type
 
   type ('fu, 'return) route =
-    | Handler : ('f, 'x) Vif_route.req * ('x, 'r) Vif_uri.t -> ('f, 'r) route
+    | Handler : ('f, 'x) Vif_route.req * ('x, 'o, 'r) Vif_uri.t -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
   let head t = Handler (Request (Some `HEAD, Null), t)
