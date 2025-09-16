@@ -5,7 +5,7 @@
  (modes native)
  (wrapped false)
  (libraries
-  vif.meta
+  vif.mmeta
   compiler-libs
   compiler-libs.common
   compiler-libs.toplevel

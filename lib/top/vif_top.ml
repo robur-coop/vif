@@ -129,13 +129,13 @@ module Phrase = struct
 end
 
 let ( / ) = Filename.concat
-let to_dir_path = Vif_meta.to_dir_path
+let to_dir_path = Vif_mmeta.to_dir_path
 
 let load cfg str =
   let ( let* ) = Result.bind in
-  let* path = Vif_meta.Path.of_string str in
+  let* path = Vif_mmeta.Path.of_string str in
   let* deps =
-    Vif_meta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path
+    Vif_mmeta.ancestors ~roots:cfg.roots ~predicates:[ "native" ] path
   in
   let fn acc (_pkg, path, descr) =
     let path =
