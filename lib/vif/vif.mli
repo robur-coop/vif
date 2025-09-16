@@ -223,8 +223,8 @@ module Uri : sig
   val ( /% ) : ('f, 'a -> 'r) path -> 'a atom -> ('f, 'r) path
   (** [p /% v] operator extends a given path [p] with a new {!type:atom} [v]. *)
 
-  type nil = unit
-  type any = (string * string list) list
+  type nil
+  type any
   type ('f, 'o, 'r) query
   (** Type of the query part of an URI. *)
 
