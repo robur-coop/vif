@@ -1,9 +1,8 @@
-let src = Logs.Src.create "vif"
+let src = Logs.Src.create "vifu"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 module Json = Vif_core.Json
 module Uri = Vif_core.Uri
-module Client = Vif_client_unix
 module Device = Vif_core.Device
 module Server = Vif_core.Server
 module Queries = Vif_core.Queries
@@ -16,17 +15,38 @@ module Cookie = Vif_core.Cookie
 module Devices = Vif_core.Devices
 module Multipart_form = Vif_core.Multipart_form
 
+module Handler = struct
+  include Vif_core.Handler
+
+  type nonrec ('c, 'value) t = (Mhttp.flow, 'c, 'value) t
+end
+
+module Response = struct
+  include Vif_core.Response
+
+  type nonrec empty = empty = Empty
+  type nonrec filled = filled = Filled
+  type nonrec sent = sent = Sent
+
+  module Infix = struct
+    let ( >>= ) = bind
+  end
+
+  module Syntax = struct
+    let ( let* ) = bind
+  end
+end
+
 module Route = struct
   include Vif_core.Route
 
-  type nonrec 'r t = (Httpcats.Server.flow, 'r) t
+  type nonrec 'r t = (Mhttp.flow, 'r) t
 
   open Vif_core.Type
 
   type ('fu, 'return) route =
     | Handler :
-        (Httpcats.Server.flow, 'f, 'x) Vif_core.Route.req
-        * ('x, 'r) Vif_core.Uri.t
+        (Mhttp.flow, 'f, 'x) Vif_core.Route.req * ('x, 'r) Vif_core.Uri.t
         -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
@@ -41,23 +61,21 @@ end
 module Middleware = struct
   include Vif_core.Middleware
 
-  type nonrec ('cfg, 'v) t = (Httpcats.Server.flow, 'cfg, 'v) t
+  type nonrec ('cfg, 'v) t = (Mhttp.flow, 'cfg, 'v) t
 end
 
 module Middlewares = struct
   type 'cfg t =
     | [] : 'cfg t
-    | ( :: ) :
-        (Httpcats.Server.flow, 'cfg, 'a) Vif_core.Middleware.t * 'cfg t
-        -> 'cfg t
+    | ( :: ) : (Mhttp.flow, 'cfg, 'a) Vif_core.Middleware.t * 'cfg t -> 'cfg t
 
-  type ('cfg, 'v) fn = (Httpcats.Server.flow, 'cfg, 'v) Vif_core.Middleware.fn
+  type ('cfg, 'v) fn = (Mhttp.flow, 'cfg, 'v) Vif_core.Middleware.fn
 
   let v = Vif_core.Middleware.v
 
   type ('value, 'a, 'c) ctx = {
       server: Vif_core.Server.t
-    ; request: Httpcats.Server.flow Vif_core.Request0.t
+    ; request: Mhttp.flow Vif_core.Request0.t
     ; target: string
     ; user's_value: 'value
   }
@@ -78,76 +96,41 @@ module Middlewares = struct
       end
 end
 
-module Response = struct
-  include Vif_core.Response
-
-  let mime_type path =
-    let default = "application/octet-stream" in
-    match Conan_unix.run_with_tree Conan_light.tree (Fpath.to_string path) with
-    | Ok m -> Option.value ~default (Conan.Metadata.mime m)
-    | Error _ -> default
-    | exception _ -> default
-
-  let with_file ?mime ?compression:alg ?etag req path =
-    if
-      Sys.file_exists (Fpath.to_string path) = false
-      || Sys.is_directory (Fpath.to_string path)
-    then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
-    if Vif_handler_unix.cached_on_client_side req path then
-      let* () = with_string req "" in
-      respond `Not_modified
-    else
-      let mime = Option.value ~default:(mime_type path) mime in
-      let src = Vif_handler_unix.file (Fpath.to_string path) in
-      let field = "connection" in
-      let* () =
-        if Vif_core.Request.version req = 1 then add ~field "close"
-        else return ()
-      in
-      let field = "content-type" in
-      let* () = add ~field mime in
-      let stat = Unix.stat (Fpath.to_string path) in
-      let field = "content-length" in
-      let* () = add ~field (string_of_int stat.Unix.st_size) in
-      let none = return false in
-      let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
-      let field = "etag" in
-      let etag =
-        match etag with
-        | None -> Vif_handler_unix.sha256sum path
-        | Some etag -> etag
-      in
-      let* () = add ~field etag in
-      let* () = with_source req src in
-      respond `OK
-
-  type nonrec empty = empty = Empty
-  type nonrec filled = filled = Filled
-  type nonrec sent = sent = Sent
-
-  module Infix = struct
-    let ( >>= ) = bind
-  end
-
-  module Syntax = struct
-    let ( let* ) = bind
-  end
-end
-
-module Handler = struct
-  include Vif_core.Handler
-  include Vif_handler_unix
-end
-
 module Request = struct
   include Vif_core.Request
 
-  type nonrec ('c, 'a) t = (Httpcats.Server.flow, 'c, 'a) t
-  type nonrec request = Httpcats.Server.flow request
+  type nonrec ('c, 'a) t = (Mhttp.flow, 'c, 'a) t
+  type nonrec request = Mhttp.flow request
 end
 
-type ic = Httpcats.Server.Websocket.ic
-type oc = Httpcats.Server.Websocket.oc
+module Config = struct
+  type t = {
+      http:
+        [ `HTTP_1_1 of H1.Config.t
+        | `H2 of H2.Config.t
+        | `Both of H1.Config.t * H2.Config.t ]
+        option
+    ; tls: Tls.Config.server option
+    ; port: int
+    ; cookie_key: Mirage_crypto.AES.GCM.key
+  }
+
+  let really_bad_secret =
+    let open Digestif in
+    let hash = SHA256.digest_string "\xde\xad\xbe\xef" in
+    let hash = SHA256.to_raw_string hash in
+    Mirage_crypto.AES.GCM.of_secret hash
+
+  let v ?(cookie_key = really_bad_secret) ?http ?tls port =
+    let http =
+      match http with
+      | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
+      | Some (`H2 cfg) -> Some (`H2 cfg)
+      | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
+      | None -> None
+    in
+    { http; tls; cookie_key; port }
+end
 
 type 'value daemon = {
     queue: 'value user's_function Queue.t
@@ -160,16 +143,13 @@ type 'value daemon = {
 
 and 'value user's_function =
   | User's_request :
-      Httpcats.Server.flow Vif_core.Request0.t * 'value fn
+      Mhttp.flow Vif_core.Request0.t * 'value fn
       -> 'value user's_function
-  | User's_websocket : 'value ws -> 'value user's_function
 
 and 'value fn =
      Vif_core.Server.t
   -> 'value
   -> (Response.empty, Response.sent, unit) Vif_core.Response.t
-
-and 'value ws = Vif_core.Server.t -> 'value -> unit
 
 let to_ctx daemon req0 =
   {
@@ -204,14 +184,10 @@ let rec user's_functions daemon =
     Queue.clear daemon.queue; lst
   in
   let fn = function
-    | User's_websocket fn ->
-        Log.debug (fun m -> m "start to execute a websocket handler");
-        let fn () = fn daemon.server daemon.user's_value in
-        ignore (Miou.async ~orphans:daemon.orphans fn)
     | User's_request (req0, fn) ->
         let src = Vif_core.Request0.src req0 in
         Logs.debug ~src (fun m -> m "new user's request handler");
-        let now () = Int32.of_float (Unix.gettimeofday ()) in
+        let now () = Int32.of_int (Mkernel.clock_wall ()) in
         let fn () =
           try
             Logs.debug ~src (fun m -> m "run user's request handler");
@@ -263,25 +239,7 @@ let handler ~default ~middlewares routes daemon =
       Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
       raise exn
 
-let ws_handler daemon fn ?stop flow =
-  let fn ic oc =
-    begin
-      Miou.Mutex.protect daemon.mutex @@ fun () ->
-      Queue.push (User's_websocket (fn ic oc)) daemon.queue;
-      Miou.Condition.signal daemon.condition
-    end
-  in
-  Log.debug (fun m -> m "Start to upgrade a connection to websocket");
-  Httpcats.Server.Websocket.upgrade ?stop ~fn flow
-
-type config = Vif_config_unix.config
-
-let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
-let config = Vif_config_unix.config
-
-let process stop cfg server user's_value ready (fn, ws_fn) =
-  Logs.debug (fun m ->
-      m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
+let process cfg server tcpv4 user's_value ready fn =
   let daemon =
     {
       queue= Queue.create ()
@@ -294,42 +252,30 @@ let process stop cfg server user's_value ready (fn, ws_fn) =
   in
   let fn = fn daemon in
   let user's_tasks = Miou.async @@ fun () -> user's_functions daemon in
-  let parallel = false in
   (* NOTE(dinosaure): The user task **must** be executed cooperatively (instead
      of in parallel) with the task managing the new http connection. [httpcats]
      is therefore instructed to launch the task managing the http connection on
      the same domain as the [process] domain. *)
-  match (cfg.Vif_config_unix.http, cfg.Vif_config_unix.tls) with
-  | config, Some tls ->
+  match (cfg.Config.http, cfg.Config.tls) with
+  | _config, Some _tls ->
+      assert false
+      (*
       let upgrade flow = ws_handler daemon ws_fn (`Tls flow) in
       Httpcats.Server.with_tls ~parallel ~upgrade ?stop ?config
         ~backlog:cfg.backlog tls ~ready ~handler:fn cfg.sockaddr;
       Miou.cancel user's_tasks
+      *)
   | Some (`H2 _), None ->
       Miou.cancel user's_tasks;
       assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
-      Httpcats.Server.clear ~parallel ~upgrade ?stop ~config ~ready ~handler:fn
-        cfg.sockaddr;
+      Mhttp.clear ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
   | None, None ->
-      let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Httpcats.Server.clear ~parallel ~upgrade ?stop ~ready ~handler:fn
-        cfg.sockaddr;
+      Mhttp.clear ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
-
-let store_pid = function
-  | None -> ()
-  | Some v ->
-      Log.debug (fun m -> m "Create PID file");
-      let oc = open_out (Fpath.to_string v) in
-      output_string oc (string_of_int (Unix.getpid ()));
-      close_out oc;
-      let delete () = try Unix.unlink (Fpath.to_string v) with _exn -> () in
-      at_exit delete
 
 let default req target _server _user's_value =
   let pp_field ppf (k, v) =
@@ -364,71 +310,14 @@ let default_from_handlers handlers req target server user's_value =
   | Some p -> p
   | None -> default req target server user's_value
 
-let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
-    ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
-    user's_value =
-  let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
-  let finally () = Mirage_crypto_rng_miou_unix.kill rng in
-  Fun.protect ~finally @@ fun () ->
-  let interactive = !Sys.interactive in
-  let domains = Int.min (Miou.Domain.available ()) cfg.domains in
-  let stop =
-    match interactive with
-    | true ->
-        let stop = Httpcats.Server.stop () in
-        let fn _sigint =
-          Log.debug (fun m -> m "Server shutdown request (SIGINT)");
-          Httpcats.Server.switch stop
-        in
-        let behavior = Sys.Signal_handle fn in
-        ignore (Miou.sys_signal Sys.sigint behavior);
-        Some stop
-    | false -> None
-  in
-  Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
+let run ~cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
+    ?(handlers = []) tcpv4 routes user's_value =
   let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
-  Logs.debug (fun m -> m "devices launched");
-  let server =
-    { Vif_core.Server.devices; cookie_key= cfg.Vif_config_unix.cookie_key }
-  in
+  let server = { Vif_core.Server.devices; cookie_key= cfg.Config.cookie_key } in
   let default = default_from_handlers handlers in
-  let websocket =
-    match websocket with
-    | None -> fun _ oc _ _ -> oc (`Connection_close, String.empty)
-    | Some websocket -> websocket
-  in
   let fn0 = handler ~default ~middlewares routes in
-  let ws_fn0 = websocket in
   let rd0 = Miou.Computation.create () in
   let prm0 =
-    Miou.async @@ fun () ->
-    process stop cfg server user's_value rd0 (fn0, ws_fn0)
+    Miou.async @@ fun () -> process cfg server tcpv4 user's_value rd0 fn0
   in
-  let tasks =
-    let fn _ =
-      let ready = Miou.Computation.create () in
-      let fn = handler ~default ~middlewares routes in
-      let ws_fn = websocket in
-      (ready, fn, ws_fn)
-    in
-    List.init domains fn
-  in
-  let prm1 =
-    Miou.async @@ fun () ->
-    let rdn = rd0 :: List.map (fun (x, _, _) -> x) tasks in
-    List.iter Miou.Computation.await_exn rdn;
-    store_pid cfg.pid
-  in
-  let prmn =
-    let fn (ready, fn, ws_fn) =
-      process stop cfg server user's_value ready (fn, ws_fn)
-    in
-    if domains > 0 then Miou.parallel fn tasks else []
-  in
-  Miou.await_exn prm0;
-  Miou.await_exn prm1;
-  List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
-  Devices.finally (Vif_core.Device.Devices devices);
-  Log.debug (fun m -> m "Vif (and devices) terminated")
-
-let setup_config = Vif_options_unix.setup_config
+  Miou.await_exn prm0

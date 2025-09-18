@@ -282,22 +282,30 @@ let extract url =
 
 (** {4 Multiple match} *)
 
-type ('fu, 'return) req =
+type ('socket, 'fu, 'return) req =
   | Request :
       Vif_method.t option * ('c, 'a) Vif_type.t
-      -> (('c, 'a) Vif_request.t -> 'r, 'r) req
+      -> ('socket, ('socket, 'c, 'a) Vif_request.t -> 'r, 'r) req
 
-type 'r t = Route : ('f, 'x) req * ('x, 'r) Vif_uri.t * 'f -> 'r t
+type ('socket, 'r) t =
+  | Route : ('socket, 'f, 'x) req * ('x, 'r) Vif_uri.t * 'f -> ('socket, 'r) t
 
 let route req t f = Route (req, t, f)
 
-type 'r re_ex =
-  | ReEx : ('f, 'x) req * 'f * Re.Mark.t * ('x, 'r) re_url -> 'r re_ex
+type ('socket, 'r) re_ex =
+  | ReEx :
+      ('socket, 'f, 'x) req * 'f * Re.Mark.t * ('x, 'r) re_url
+      -> ('socket, 'r) re_ex
 
 (* It's important to keep the order here, since Re will choose
    the first regexp if there is ambiguity.
 *)
-let rec build_info_list p idx = function
+let rec build_info_list : type s r.
+       (Vif_method.t option -> bool)
+    -> int
+    -> (s, r) t list
+    -> Re.t list * (s, r) re_ex list =
+ fun p idx -> function
   | [] -> ([], [])
   | Route ((Request (meth, _) as req), url, f) :: l when p meth ->
       let idx, re_url, re = re_url idx url in
@@ -310,17 +318,20 @@ let build_info_list p l =
   let rel, wl = build_info_list p 1 l in
   (Re.(compile @@ whole_string @@ alt rel), wl)
 
-let build_info l =
+let build_info : type s r.
+       (s, r) t list
+    -> (Re.re * (s, r) re_ex list) Vif_method.Map.t
+       * (Re.re * (s, r) re_ex list) =
+ fun l ->
   (* First figure out what methods the routes match *)
   (* We abuse Vif_method.Map as a set *)
-  let methods =
-    List.fold_left
-      (fun acc r ->
-        match r with
-        | Route (Request (None, _), _, _) -> acc
-        | Route (Request (Some meth, _), _, _) -> Vif_method.Map.add meth () acc)
-      Vif_method.Map.empty l
+  let fn : type s r. 'acc -> (s, r) t -> 'acc =
+   fun acc r ->
+    match r with
+    | Route (Request (None, _), _, _) -> acc
+    | Route (Request (Some meth, _), _, _) -> Vif_method.Map.add meth () acc
   in
+  let methods = List.fold_left fn Vif_method.Map.empty l in
   let methods =
     Vif_method.Map.mapi
       (fun meth () ->
@@ -331,19 +342,19 @@ let build_info l =
   and jokers = build_info_list Option.is_none l in
   (methods, jokers)
 
-type request = {
+type 'socket request = {
     extract:
       'c 'a.
          Vif_method.t option
       -> ('c, 'a) Vif_type.t
-      -> ('c, 'a) Vif_request.t option
+      -> ('socket, 'c, 'a) Vif_request.t option
 }
 
 let prepare_uri uri =
   uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
 
-let rec find_and_trigger : type r.
-    original:string -> request -> Re.Group.t -> r re_ex list -> r =
+let rec find_and_trigger : type s r.
+    original:string -> s request -> Re.Group.t -> (s, r) re_ex list -> r =
  fun ~original e subs -> function
   | [] -> raise Not_found
   | ReEx (Request (meth, c), f, id, re_url) :: l ->
@@ -368,11 +379,11 @@ let match_ (methods, jokers) meth s =
       let+ subs = Re.exec_opt (fst jokers) s in
       (subs, snd jokers)
 
-let dispatch : type r c.
-       default:((c, string) Vif_request.t -> string -> r)
-    -> r t list
+let dispatch : type s r c.
+       default:((s, c, string) Vif_request.t -> string -> r)
+    -> (s, r) t list
     -> meth:Vif_method.t
-    -> request:request
+    -> request:s request
     -> target:string
     -> r =
  fun ~default l ->

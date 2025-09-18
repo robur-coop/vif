@@ -21,23 +21,6 @@ type 'a source =
       -> 'a source
 
 module Source = struct
-  let file ?offset path =
-    let buf = Bytes.create 0x7ff in
-    let init () =
-      let fd = Unix.openfile path Unix.[ O_RDONLY ] 0o644 in
-      match offset with
-      | Some offset ->
-          let _ = Unix.lseek fd offset Unix.SEEK_SET in
-          fd
-      | None -> fd
-    in
-    let stop fd = Unix.close fd in
-    let pull fd =
-      let len = Unix.read fd buf 0 (Bytes.length buf) in
-      if len == 0 then None else Some (Bytes.sub_string buf 0 len, fd)
-    in
-    (Source { init; stop; pull } : string source)
-
   let list lst =
     let pull = function [] -> None | x :: r -> Some (x, r) in
     Source { init= Fun.const lst; pull; stop= ignore }
@@ -399,10 +382,10 @@ module Flow = struct
         gzip_until_await ~push ~acc encoder o
     | `End _ -> assert false
 
-  let now () = Int32.of_float (Unix.gettimeofday ())
+  (* let now () = Int32.of_float (Unix.gettimeofday ()) *)
 
   let gzip ?(q = De.Queue.create 0x100) ?(w = De.Lz77.make_window ~bits:15)
-      ?(level = 4) () =
+      ?(level = 4) now =
     let flow (Sink k) =
       let init () =
         let encoder =

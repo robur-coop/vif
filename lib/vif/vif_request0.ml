@@ -2,19 +2,20 @@ let src = Logs.Src.create "vif.request0"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type t = {
+type 'socket t = {
     request: request
   ; tls: Tls.Core.epoch_data option
   ; reqd: reqd
-  ; socket: socket
+  ; socket: 'socket
   ; on_localhost: bool
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; queries: (string * string list) list
   ; src: Logs.src
 }
 
-and reqd = Httpcats.Server.reqd
-and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ]
+and reqd = Httpcats_core.Server.reqd
+
+(* and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ] *)
 and request = V1 of H1.Request.t | V2 of H2.Request.t
 
 let accept { request; _ } =
@@ -46,6 +47,7 @@ let accept { request; _ } =
       let types = List.sort (fun (_, a) (_, b) -> Float.compare b a) types in
       List.map fst types
 
+(*
 let peer { socket; _ } =
   let file_descr =
     match socket with
@@ -56,6 +58,7 @@ let peer { socket; _ } =
   | Unix.ADDR_INET (inet_addr, port) ->
       Fmt.str "%s:%d" (Unix.string_of_inet_addr inet_addr) port
   | Unix.ADDR_UNIX v -> Fmt.str "<%s>" v
+*)
 
 let src { src; _ } = src
 
@@ -84,7 +87,8 @@ let to_source ~src = function
       to_source ~src ~schedule:H2.Body.Reader.schedule_read
         ~close:H2.Body.Reader.close body
 
-let of_reqd socket reqd =
+let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
+    ?(is_localhost = Fun.const false) socket reqd =
   let request, body =
     match reqd with
     | `V1 reqd -> (V1 (H1.Reqd.request reqd), `V1 (H1.Reqd.request_body reqd))
@@ -95,17 +99,10 @@ let of_reqd socket reqd =
     | V1 req -> req.H1.Request.target
     | V2 req -> req.H2.Request.target
   in
-  let tls =
-    match socket with `Tls tls -> Tls_miou_unix.epoch tls | `Tcp _ -> None
-  in
-  let fd =
-    match socket with
-    | `Tls tls ->
-        let fd = Tls_miou_unix.file_descr tls in
-        Miou_unix.to_file_descr fd
-    | `Tcp fd -> Miou_unix.to_file_descr fd
-  in
+  let tls = with_tls socket in
   let on_localhost, src =
+    (is_localhost socket, Logs.Src.create (Fmt.str "vif:%s" (peer socket)))
+    (*
     match Unix.getpeername fd with
     | Unix.ADDR_UNIX str ->
         let src = Logs.Src.create (Fmt.str "vif:<%s>" str) in
@@ -118,6 +115,7 @@ let of_reqd socket reqd =
         ( inet_addr = Unix.inet_addr_loopback
           || inet_addr = Unix.inet6_addr_loopback
         , src )
+    *)
   in
   let queries = Pct.query_of_target target in
   { request; tls; reqd; socket; on_localhost; body; queries; src }

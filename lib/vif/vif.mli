@@ -283,8 +283,8 @@ module Uri : sig
       exception. *)
 end
 
-module Json = Json
-module Stream = Vif_stream
+module Json = Vif_core.Json
+module Stream = Vif_core.Stream
 
 module Headers : sig
   type t = (string * string) list

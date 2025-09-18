@@ -2,18 +2,18 @@ let src = Logs.Src.create "vif.request"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type ('c, 'a) t = {
+type ('socket, 'c, 'a) t = {
     body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; encoding: ('c, 'a) Vif_type.t
   ; env: Vif_middleware.Hmap.t
-  ; request: Vif_request0.t
+  ; request: 'socket Vif_request0.t
 }
 
 let of_req0 : type c a.
        encoding:(c, a) Vif_type.t
     -> env:Vif_middleware.Hmap.t
-    -> Vif_request0.t
-    -> (c, a) t =
+    -> 'socket Vif_request0.t
+    -> ('socket, c, a) t =
  fun ~encoding ~env request ->
   let body = Vif_request0.request_body request in
   { request; body; encoding; env }
@@ -33,8 +33,8 @@ let to_string { request; _ } =
 
 let error_msgf fmt = Format.kasprintf (fun msg -> Error (`Msg msg)) fmt
 
-let of_json : type a. (Vif_type.json, a) t -> (a, [> `Msg of string ]) result =
-  function
+let of_json : type a.
+    ('socket, Vif_type.json, a) t -> (a, [> `Msg of string ]) result = function
   | { encoding= Any; _ } as req -> Ok (to_string req)
   | { encoding= Json; _ } as req ->
       let open Vif_stream in
@@ -53,11 +53,12 @@ let of_json : type a. (Vif_type.json, a) t -> (a, [> `Msg of string ]) result =
       | Ok _ as value -> value
     end
 
-let get : type v. ('cfg, v) Vif_middleware.t -> ('a, 'c) t -> v option =
+let get : type v.
+    ('socket, 'cfg, v) Vif_middleware.t -> ('socket, 'a, 'c) t -> v option =
  fun (Vif_middleware.Middleware (_, key)) { env; _ } ->
   Vif_middleware.Hmap.find key env
 
-type request = Vif_request0.t
+type 'socket request = 'socket Vif_request0.t
 
 let headers_of_request = Vif_request0.headers
 let method_of_request = Vif_request0.meth

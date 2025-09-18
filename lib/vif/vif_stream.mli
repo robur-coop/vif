@@ -75,7 +75,7 @@ type 'a source =
       -> 'a source  (** Type of sources that produce elements of type ['a]. *)
 
 module Source : sig
-  val file : ?offset:int -> string -> string source
+  (* val file : ?offset:int -> string -> string source *)
 
   val list : 'a list -> 'a source
   (** [list lst] is a source will all elements from the [lst] list. *)
@@ -206,7 +206,7 @@ module Flow : sig
        ?q:De.Queue.t
     -> ?w:De.Lz77.window
     -> ?level:int
-    -> unit
+    -> (unit -> int32)
     -> (string, string) flow
 
   val bound : int -> ('a, 'a) flow
