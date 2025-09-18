@@ -21,3 +21,6 @@ run-test: [
 ]
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
+pin-depends: [
+  [ "mhttp.dev" "git+https://github.com/dinosaure/mhttp.git#5f1717e7bafd9b267f32c7247ce358095d1aa3eb" ]
+]

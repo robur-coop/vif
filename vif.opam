@@ -44,3 +44,6 @@ run-test: [
 ]
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
+pin-depends: [
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#56ad42dd5667c1699240c609fd0e193f88bba1fb" ]
+]
