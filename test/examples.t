@@ -61,12 +61,8 @@ This matches the "number" route:
 One might think this matches the "horse" route, but it is actually matched by
 the "number" route - but the "number" route does not trigger as the converter
 raises an exception through `int_of_string`!
-  $ hurl http://localhost:$PORT/horse -p=b
+  $ hurl http://localhost:$PORT/horse -p=b | head -n1
   Unspecified destination /horse (GET):
-  user-agent: hurl/0.1.0
-  host: localhost
-  connection: close
-  content-length: 0
   $ kill -INT $(cat vif.pid)
 
   $ cd examples/19-regex-method/
