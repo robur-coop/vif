@@ -8,20 +8,25 @@ let tree = Conan_light.tree
 let file ?offset path =
   let open Vif_core.Stream in
   let buf = Bytes.create 0x7ff in
-  let init () =
+  let fn bqueue =
     let fd = Unix.openfile path Unix.[ O_RDONLY ] 0o644 in
-    match offset with
-    | Some offset ->
-        let _ = Unix.lseek fd offset Unix.SEEK_SET in
-        fd
-    | None -> fd
+    let finally () = Unix.close fd in
+    let _ =
+      match offset with
+      | Some offset -> Unix.lseek fd offset Unix.SEEK_SET
+      | None -> 0
+    in
+    let rec go () =
+      let len = Unix.read fd buf 0 (Bytes.length buf) in
+      if len > 0 then begin
+        let str = Bytes.sub_string buf 0 len in
+        Bqueue.put bqueue str; go ()
+      end
+      else Bqueue.close bqueue
+    in
+    Fun.protect ~finally go
   in
-  let stop fd = Unix.close fd in
-  let pull fd =
-    let len = Unix.read fd buf 0 (Bytes.length buf) in
-    if len == 0 then None else Some (Bytes.sub_string buf 0 len, fd)
-  in
-  (Source { init; stop; pull } : string source)
+  Source.with_task ~limit:10 fn
 
 let sha256sum path =
   let path = Fpath.to_string path in
@@ -46,12 +51,14 @@ let mime_type path =
   | Error _ -> "application/octet-stream"
   | exception _ -> "application/octet-stream"
 
-let cached_on_client_side req target =
+let cached_on_client_side ?etag req target =
   let hdrs = Request.headers req in
-  let hash = sha256sum target in
-  match Headers.get hdrs "if-none-match" with
-  | Some hash' -> String.equal hash hash'
-  | None -> false
+  match (Headers.get hdrs "if-none-match", etag) with
+  | Some hash', None ->
+      let hash = sha256sum target in
+      String.equal hash hash'
+  | Some hash', Some hash -> String.equal hash hash'
+  | None, _ -> false
 
 let valid ~top target =
   Fpath.is_prefix top target
