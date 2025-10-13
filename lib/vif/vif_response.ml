@@ -137,7 +137,6 @@ let with_json ?compression:alg req ?format ?number_format w v =
     let res =
       Jsont_bytesrw.encode ?format ?number_format ~eod:true w v writer
     in
-    Bqueue.close bqueue;
     match res with
     | Ok () -> ()
     | Error msg -> Fmt.failwith "Vif.Response.with_json: %s" msg
