@@ -285,6 +285,15 @@ module Response : sig
     -> Tyxml.Html.doc
     -> (empty, filled, unit) t
 
+  val with_json :
+       ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> ?format:Jsont.format
+    -> ?number_format:Jsont.number_format
+    -> 'a Jsont.t
+    -> 'a
+    -> (empty, filled, unit) t
+
   val empty : (empty, filled, unit) t
   val websocket : (empty, sent, unit) t
   val respond : Status.t -> (filled, sent, unit) t

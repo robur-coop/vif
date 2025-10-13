@@ -126,6 +126,33 @@ let with_tyxml ?compression:alg req tyxml =
   in
   Source source
 
+let with_json ?compression:alg req ?format ?number_format w v =
+  let open Vif_stream in
+  let fn bqueue =
+    let fn slice =
+      if Bytesrw.Bytes.Slice.is_eod slice then Bqueue.close bqueue
+      else Bqueue.put bqueue (Bytesrw.Bytes.Slice.to_string slice)
+    in
+    let writer = Bytesrw.Bytes.Writer.make fn in
+    let res =
+      Jsont_bytesrw.encode ?format ?number_format ~eod:true w v writer
+    in
+    match res with
+    | Ok () -> ()
+    | Error msg -> Fmt.failwith "Vif.Response.with_json: %s" msg
+  in
+  let src = Source.with_task ~limit:10 fn in
+  let none = return false in
+  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+  let field = "transfer-encoding" in
+  let v = "chunked" in
+  let* _ = add_unless_exists ~field v in
+  let field = "content-type" in
+  let v = "application/json; charset=utf-8" in
+  let* _ = add_unless_exists ~field v in
+  let* _ = add_unless_exists ~field:"connection" "close" in
+  Source src
+
 let empty =
   let field = "content-length" in
   let* () = add ~field "0" in
