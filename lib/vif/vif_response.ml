@@ -99,13 +99,11 @@ let connection_close req =
   | 1 -> add_unless_exists ~field:"connection" "close"
   | _ -> return false
 
-let content_length req len =
-  match Vif_request.version req with
-  | 1 -> add_unless_exists ~field:"content-length" (string_of_int len)
-  | _ -> return false
+let content_length len =
+  add_unless_exists ~field:"content-length" (string_of_int len)
 
 let with_string ?compression:alg req str =
-  let* _ = content_length req (String.length str) in
+  let* _ = content_length (String.length str) in
   let* _ = connection_close req in
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
@@ -163,8 +161,7 @@ let with_json ?compression:alg req ?format ?number_format w v =
   Source src
 
 let empty =
-  let field = "content-length" in
-  let* () = add ~field "0" in
+  let* _ = content_length 0 in
   String ""
 
 let websocket = Websocket

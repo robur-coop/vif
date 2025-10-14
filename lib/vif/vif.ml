@@ -99,16 +99,11 @@ module Response = struct
     else
       let mime = Option.value ~default:(mime_type path) mime in
       let src = Vif_handler_unix.file (Fpath.to_string path) in
-      let field = "connection" in
-      let* () =
-        if Vif_core.Request.version req = 1 then add ~field "close"
-        else return ()
-      in
+      let* _ = Vif_core.Response.connection_close req in
       let field = "content-type" in
       let* () = add ~field mime in
       let stat = Unix.stat (Fpath.to_string path) in
-      let field = "content-length" in
-      let* () = add ~field (string_of_int stat.Unix.st_size) in
+      let* _ = Vif_core.Response.content_length stat.Unix.st_size in
       let none = return false in
       let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
       let field = "etag" in
@@ -349,8 +344,7 @@ let default req target _server _user's_value =
   let field = "content-type" in
   let open Response.Syntax in
   let* () = Vif_core.Response.add ~field "text/plain; charset=utf-8" in
-  let field = "content-length" in
-  let* () = Vif_core.Response.add ~field (string_of_int len) in
+  let* _ = Vif_core.Response.content_length len in
   let* () = Vif_core.Response.with_string req str in
   Vif_core.Response.respond `Not_found
 

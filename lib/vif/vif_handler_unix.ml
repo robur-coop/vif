@@ -126,9 +126,7 @@ let static ?(top = pwd) =
                   mime
             in
             let src = file (Fpath.to_string abs_path) in
-            let field = "content-length" in
-            let size = string_of_int stat.Unix.st_size in
-            let* () = Response.add ~field size in
+            let* _ = Response.content_length stat.Unix.st_size in
             let field = "content-type" in
             let* () = Response.add ~field mime in
             let field = "etag" in
