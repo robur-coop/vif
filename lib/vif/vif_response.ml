@@ -94,10 +94,19 @@ let with_source ?compression:alg req source =
   let* _ = add_unless_exists ~field v in
   Source source
 
+let connection_close req =
+  match Vif_request.version req with
+  | 1 -> add_unless_exists ~field:"connection" "close"
+  | _ -> return false
+
+let content_length req len =
+  match Vif_request.version req with
+  | 1 -> add_unless_exists ~field:"content-length" (string_of_int len)
+  | _ -> return false
+
 let with_string ?compression:alg req str =
-  let field = "content-length" in
-  let* () = add ~field (string_of_int (String.length str)) in
-  let* _ = add_unless_exists ~field:"connection" "close" in
+  let* _ = content_length req (String.length str) in
+  let* _ = connection_close req in
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   String str
@@ -119,7 +128,7 @@ let with_tyxml ?compression:alg req tyxml =
   let field = "content-type" in
   let v = "text/html; charset=utf-8" in
   let* _ = add_unless_exists ~field v in
-  let* _ = add_unless_exists ~field:"connection" "close" in
+  let* _ = connection_close req in
   let source =
     Vif_stream.Source.with_formatter @@ fun ppf ->
     Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
@@ -150,13 +159,12 @@ let with_json ?compression:alg req ?format ?number_format w v =
   let field = "content-type" in
   let v = "application/json; charset=utf-8" in
   let* _ = add_unless_exists ~field v in
-  let* _ = add_unless_exists ~field:"connection" "close" in
+  let* _ = connection_close req in
   Source src
 
 let empty =
   let field = "content-length" in
   let* () = add ~field "0" in
-  let* _ = add_unless_exists ~field:"connection" "close" in
   String ""
 
 let websocket = Websocket
@@ -280,6 +288,8 @@ let run : type a p q.
               (headers, Vif_stream.Flow.gzip now)
           | _ -> (headers, Vif_stream.Flow.identity)
         in
+        Logs.debug ~src (fun m ->
+            m "new response with: @[<hov>%a@]" Vif_headers.pp headers);
         let into = response ~headers status req in
         Logs.debug ~src (fun m -> m "run our stream to send a response");
         let (), src = Vif_stream.Stream.run ~from ~via ~into in

@@ -24,3 +24,5 @@ let rem hdrs key =
     if String.lowercase_ascii key' = key then acc else (key', value) :: acc
   in
   List.fold_left fn [] hdrs |> List.rev
+
+let pp = Fmt.(Dump.list (Dump.pair string string))
