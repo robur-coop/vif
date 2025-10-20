@@ -10,6 +10,8 @@ type config = {
   ; pid: Fpath.t option
   ; cookie_key: Mirage_crypto.AES.GCM.key
   ; domains: int
+  ; reporter: Logs.reporter option
+  ; level: Logs.level option option
 }
 
 let really_bad_secret =
@@ -21,7 +23,7 @@ let really_bad_secret =
 let default_domains = Int.min (Stdlib.Domain.recommended_domain_count ()) 4
 
 let config ?(domains = default_domains) ?(cookie_key = really_bad_secret) ?pid
-    ?http ?tls ?(backlog = 64) sockaddr =
+    ?reporter ?level ?http ?tls ?(backlog = 64) sockaddr =
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
@@ -29,4 +31,4 @@ let config ?(domains = default_domains) ?(cookie_key = really_bad_secret) ?pid
     | Some (`Both (h1, h2)) -> Some (`Both (h1, h2))
     | None -> None
   in
-  { http; tls; backlog; sockaddr; pid; cookie_key; domains }
+  { http; tls; backlog; sockaddr; pid; cookie_key; domains; reporter; level }

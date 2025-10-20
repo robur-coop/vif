@@ -1097,6 +1097,8 @@ val config :
      ?domains:int
   -> ?cookie_key:Mirage_crypto.AES.GCM.key
   -> ?pid:Fpath.t
+  -> ?reporter:Logs.reporter
+  -> ?level:Logs.level option
   -> ?http:
        [ `H1 of H1.Config.t
        | `H2 of H2.Config.t
