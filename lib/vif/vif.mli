@@ -1097,6 +1097,8 @@ val config :
      ?domains:int
   -> ?cookie_key:Mirage_crypto.AES.GCM.key
   -> ?pid:Fpath.t
+  -> ?reporter:Logs.reporter
+  -> ?level:Logs.level option
   -> ?http:
        [ `H1 of H1.Config.t
        | `H2 of H2.Config.t
@@ -1124,3 +1126,4 @@ val run :
 (**/*)
 
 val setup_config : unit Cmdliner.Term.t
+val reporter : sources:Re.t option -> ppf:Format.formatter -> Logs.reporter

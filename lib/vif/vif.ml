@@ -368,6 +368,8 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
     ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
     user's_value =
   let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
+  Option.iter Logs.set_reporter cfg.reporter;
+  Option.iter Logs.set_level cfg.level;
   let finally () = Mirage_crypto_rng_miou_unix.kill rng in
   Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
@@ -432,3 +434,4 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options_unix.setup_config
+let reporter ~sources ~ppf = Vif_options_unix.reporter sources ppf

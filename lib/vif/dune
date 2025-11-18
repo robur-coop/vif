@@ -37,6 +37,9 @@
   decompress.gz
   tyxml
   httpcats.core
+  logs.fmt
+  fmt.cli
+  logs.cli
   tyre))
 
 (library
