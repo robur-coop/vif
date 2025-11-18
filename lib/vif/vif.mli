@@ -1126,3 +1126,4 @@ val run :
 (**/*)
 
 val setup_config : unit Cmdliner.Term.t
+val reporter : sources:Re.t option -> ppf:Format.formatter -> Logs.reporter

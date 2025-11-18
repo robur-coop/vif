@@ -434,3 +434,4 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options_unix.setup_config
+let reporter ~sources ~ppf = Vif_options_unix.reporter sources ppf
