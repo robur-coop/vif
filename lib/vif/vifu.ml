@@ -7,7 +7,6 @@ module Device = Vif_core.Device
 module Server = Vif_core.Server
 module Queries = Vif_core.Queries
 module Type = Vif_core.Type
-module Stream = Vif_core.Stream
 module Method = Vif_core.Method
 module Status = Vif_core.Status
 module Headers = Vif_core.Headers

@@ -2,7 +2,6 @@ module Handler = Vif_handler
 module Request0 = Vif_request0
 module Headers = Vif_headers
 module Response = Vif_response
-module Stream = Vif_stream
 module Json = Json
 module Type = Vif_type
 module Device = Vif_device
@@ -140,26 +139,26 @@ let recognize_request ~env req0 =
   { Vif_route.extract }
 
 module Multipart_form = struct
-  open Vif_stream
+  open Flux
 
   type 'id multipart_form_context = {
       queue: event Queue.t
     ; parse: int parse
-    ; actives: string Bqueue.t list
+    ; actives: string Flux.Bqueue.c list
   }
 
-  and event = [ `Id of Multipart_form.Header.t * string Bqueue.t ]
+  and event = [ `Id of Multipart_form.Header.t * string Flux.Bqueue.c ]
 
   and 'id parse =
        [ `Eof | `String of string ]
     -> [ `Continue
-       | `Done of string Bqueue.t Multipart_form.t
+       | `Done of string Flux.Bqueue.c Multipart_form.t
        | `Fail of string ]
 
   let rec until_await ({ queue; parse; actives } as ctx) push acc str =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
-        let src = Source.of_bqueue bqueue in
+        let src = Source.bqueue bqueue in
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
         until_await ctx push acc str
@@ -176,7 +175,7 @@ module Multipart_form = struct
   let rec until_done ({ queue; parse; actives } as ctx) push acc =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
-        let src = Source.of_bqueue bqueue in
+        let src = Source.bqueue bqueue in
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
         until_done ctx push acc
@@ -202,7 +201,7 @@ module Multipart_form = struct
     let flow (Sink k) =
       let queue = Queue.create () in
       let emitters header =
-        let bqueue = Bqueue.create 0x100 in
+        let bqueue = Flux.Bqueue.(create with_close 0x7ff) in
         Queue.push (`Id (header, bqueue)) queue;
         let emitter = function
           | None -> Bqueue.close bqueue

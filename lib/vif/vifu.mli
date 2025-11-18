@@ -33,7 +33,6 @@ module Uri : sig
 end
 
 module Json = Vif_core.Json
-module Stream = Vif_core.Stream
 
 module Headers : sig
   type t = (string * string) list
@@ -82,7 +81,7 @@ module Multipart_form : sig
   val mime : part -> string option
   val size : part -> int option
 
-  type stream = (part * string Stream.source) Stream.stream
+  type stream = (part * string Flux.source) Flux.stream
 end
 
 module Type : sig
@@ -117,7 +116,7 @@ module Request : sig
        (Type.multipart_form, 'a) t
     -> ('a, [> `Not_found of string | `Invalid_multipart_form ]) result
 
-  val source : ('c, 'a) t -> string Stream.source
+  val source : ('c, 'a) t -> string Flux.source
   val get : ('cfg, 'v) Middleware.t -> ('c, 'a) t -> 'v option
 
   type request
@@ -270,7 +269,7 @@ module Response : sig
   val with_source :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
-    -> string Stream.source
+    -> string Flux.source
     -> (empty, filled, unit) t
 
   val with_string :

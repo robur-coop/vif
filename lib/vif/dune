@@ -20,12 +20,14 @@
   vif_response
   vif_route
   vif_status
-  vif_stream
   vif_uri)
  (libraries
   multipart_form
   multipart_form-miou
   uri
+  flux
+  fluxt.gz
+  fluxt.zl
   jsonm
   jsont
   jsont.bytesrw

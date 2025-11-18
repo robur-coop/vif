@@ -284,7 +284,6 @@ module Uri : sig
 end
 
 module Json = Vif_core.Json
-module Stream = Vif_core.Stream
 
 module Headers : sig
   type t = (string * string) list
@@ -424,7 +423,7 @@ module Multipart_form : sig
   val size : part -> int option
   (** [size part] is the size of the part in bytes. *)
 
-  type stream = (part * string Stream.source) Stream.stream
+  type stream = (part * string Flux.source) Flux.stream
   (** Type of a [multipart/form-data] stream.
 
       It may be necessary to save part of a form as a file rather than storing
@@ -532,7 +531,7 @@ module Request : sig
        (Type.multipart_form, 'a) t
     -> ('a, [> `Not_found of string | `Invalid_multipart_form ]) result
 
-  val source : ('c, 'a) t -> string Stream.source
+  val source : ('c, 'a) t -> string Flux.source
 
   val get : ('cfg, 'v) Middleware.t -> ('c, 'a) t -> 'v option
   (** [get middleware req] returns the value optionally added by the given
@@ -915,7 +914,7 @@ module Response : sig
   val with_source :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
-    -> string Stream.source
+    -> string Flux.source
     -> (empty, filled, unit) t
   (** [with_string req src] responds the given stream [src] to the client. *)
 
