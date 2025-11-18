@@ -295,8 +295,7 @@ let default req target _server _user's_value =
   let field = "content-type" in
   let open Response.Syntax in
   let* () = Vif_core.Response.add ~field "text/plain; charset=utf-8" in
-  let field = "content-length" in
-  let* () = Vif_core.Response.add ~field (string_of_int len) in
+  let* _ = Vif_core.Response.content_length len in
   let* () = Vif_core.Response.with_string req str in
   Vif_core.Response.respond `Not_found
 
