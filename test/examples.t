@@ -53,7 +53,7 @@
   $ kill -INT $(cat vif.pid)
   $ cd ../../
 
-  $ vif --pid vif.pid examples/18-route-conv/main.ml -p $PORT &
+  $ vif --pid-file vif.pid examples/18-route-conv/main.ml -p $PORT &
   $ ./waitfile.exe vif.pid
 This matches the "number" route:
   $ hurl http://localhost:$PORT/42 -p=b
