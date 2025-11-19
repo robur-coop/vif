@@ -47,19 +47,6 @@ let accept { request; _ } =
       let types = List.sort (fun (_, a) (_, b) -> Float.compare b a) types in
       List.map fst types
 
-(*
-let peer { socket; _ } =
-  let file_descr =
-    match socket with
-    | `Tcp v -> Miou_unix.to_file_descr v
-    | `Tls v -> Miou_unix.to_file_descr (Tls_miou_unix.file_descr v)
-  in
-  match Unix.getpeername file_descr with
-  | Unix.ADDR_INET (inet_addr, port) ->
-      Fmt.str "%s:%d" (Unix.string_of_inet_addr inet_addr) port
-  | Unix.ADDR_UNIX v -> Fmt.str "<%s>" v
-*)
-
 let src { src; _ } = src
 
 let to_source ~src ~schedule ~close body =
@@ -100,23 +87,8 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
     | V2 req -> req.H2.Request.target
   in
   let tls = with_tls socket in
-  let on_localhost, src =
-    (is_localhost socket, Logs.Src.create (Fmt.str "vif:%s" (peer socket)))
-    (*
-    match Unix.getpeername fd with
-    | Unix.ADDR_UNIX str ->
-        let src = Logs.Src.create (Fmt.str "vif:<%s>" str) in
-        (false, src)
-    | Unix.ADDR_INET (inet_addr, port) ->
-        let src =
-          Logs.Src.create
-            (Fmt.str "vif:%s:%d" (Unix.string_of_inet_addr inet_addr) port)
-        in
-        ( inet_addr = Unix.inet_addr_loopback
-          || inet_addr = Unix.inet6_addr_loopback
-        , src )
-    *)
-  in
+  let on_localhost = is_localhost socket in
+  let src = Logs.Src.create (Fmt.str "vif:%s" (peer socket)) in
   let queries = Pct.query_of_target target in
   { request; tls; reqd; socket; on_localhost; body; queries; src }
 
