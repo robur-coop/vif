@@ -160,7 +160,7 @@ let subscribe req server _ =
       Vif.Response.respond (`Code 422)
 
 type chatroom =
-  { make : unit -> int * string Vif.Stream.source
+  { make : unit -> int * string Flux.source
   ; send : string -> unit
   ; shutdown : int -> unit }
 
@@ -171,19 +171,19 @@ let chatroom =
   let make () =
     let n = Atomic.fetch_and_add uid 1 in
     Miou.Mutex.protect mutex @@ fun () ->
-    let q = Vif.Stream.Bqueue.create 0x100 in
+    let q = Flux.Bqueue.(create with_close 0x7ff) in
     Hashtbl.replace actives n q;
-    n, Vif.Stream.Source.of_bqueue q in
+    n, Flux.Source.bqueue q in
   let shutdown uid =
     Miou.Mutex.protect mutex @@ fun () ->
     Hashtbl.remove actives uid in
   let send msg =
     Miou.Mutex.protect mutex @@ fun () ->
-    let fn _ q = Vif.Stream.Bqueue.put q msg in
+    let fn _ q = Flux.Bqueue.put q msg in
     Hashtbl.iter fn actives in
   let finally _ =
     Miou.Mutex.protect mutex @@ fun () ->
-    let fn _ q = Vif.Stream.Bqueue.close q in
+    let fn _ q = Flux.Bqueue.close q in
     Hashtbl.iter fn actives in
   Vif.Device.v ~name:"chatroom" ~finally [] @@ fun _ ->
   { make; send; shutdown }
@@ -194,7 +194,7 @@ let websocket ic oc server _ =
   let t = Vif.Server.device chatroom server in
   let uid, src = t.make () in
   let fn str = oc (`Msg (`Text, true), str) in
-  let prm0 = Miou.async @@ fun () -> Vif.Stream.Source.each fn src in
+  let prm0 = Miou.async @@ fun () -> Flux.Source.each fn src in
   let prm1 = Miou.async @@ fun () ->
     let rec go () =
       match ic () with

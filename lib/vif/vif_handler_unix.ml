@@ -6,7 +6,7 @@ let pwd = Fpath.v (Unix.getcwd ())
 let tree = Conan_light.tree
 
 let file ?offset path =
-  let open Vif_core.Stream in
+  let open Flux in
   let buf = Bytes.create 0x7ff in
   let fn bqueue =
     let fd = Unix.openfile path Unix.[ O_RDONLY ] 0o644 in
@@ -26,7 +26,7 @@ let file ?offset path =
     in
     Fun.protect ~finally go
   in
-  Source.with_task ~limit:10 fn
+  Source.with_task ~size:0x7ff fn
 
 let sha256sum path =
   let path = Fpath.to_string path in

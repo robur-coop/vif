@@ -8,7 +8,6 @@ module Device = Vif_core.Device
 module Server = Vif_core.Server
 module Queries = Vif_core.Queries
 module Type = Vif_core.Type
-module Stream = Vif_core.Stream
 module Method = Vif_core.Method
 module Status = Vif_core.Status
 module Headers = Vif_core.Headers
@@ -229,11 +228,30 @@ let rec user's_functions daemon =
   in
   List.iter fn tasks; user's_functions daemon
 
+let to_unix_file_descr = function
+  | `Tls tls -> Tls_miou_unix.file_descr tls |> Miou_unix.to_file_descr
+  | `Tcp file_descr -> Miou_unix.to_file_descr file_descr
+
+let peer socket =
+  let file_descr = to_unix_file_descr socket in
+  match Unix.getpeername file_descr with
+  | Unix.ADDR_UNIX str -> Fmt.str "<%s>" str
+  | Unix.ADDR_INET (inet_addr, port) ->
+      Fmt.str "%s:%d" (Unix.string_of_inet_addr inet_addr) port
+
+let is_localhost socket =
+  let file_descr = to_unix_file_descr socket in
+  match Unix.getpeername file_descr with
+  | Unix.ADDR_UNIX _ -> false
+  | Unix.ADDR_INET (inet_addr, _) ->
+      inet_addr = Unix.inet_addr_loopback
+      || inet_addr = Unix.inet6_addr_loopback
+
 let handler ~default ~middlewares routes daemon =
   ();
   let dispatch = Route.dispatch ~default routes in
   fun socket reqd ->
-    let req0 = Vif_core.Request0.of_reqd socket reqd in
+    let req0 = Vif_core.Request0.of_reqd socket ~is_localhost ~peer reqd in
     let ctx = to_ctx daemon req0 in
     let env = Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty in
     let request = Vif_core.recognize_request ~env req0 in

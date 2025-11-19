@@ -8,7 +8,7 @@ and sent = Sent
 
 type 'a state =
   | Empty : empty state
-  | Filled : string Vif_stream.source -> filled state
+  | Filled : string Flux.source -> filled state
   | Sent : sent state
 
 let _empty = Empty
@@ -22,7 +22,7 @@ type ('p, 'q, 'a) t =
   | Rem_header : string -> ('p, 'p, unit) t
   | Return : 'a -> ('p, 'p, 'a) t
   | Bind : ('p, 'q, 'a) t * ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
-  | Source : string Vif_stream.source -> (empty, filled, unit) t
+  | Source : string Flux.source -> (empty, filled, unit) t
   | String : string -> (empty, filled, unit) t
   | Websocket : (empty, sent, unit) t
   | Respond : Vif_status.t -> (filled, sent, unit) t
@@ -128,13 +128,13 @@ let with_tyxml ?compression:alg req tyxml =
   let* _ = add_unless_exists ~field v in
   let* _ = connection_close req in
   let source =
-    Vif_stream.Source.with_formatter @@ fun ppf ->
+    Flux.Source.with_formatter ~size:0x7ff @@ fun ppf ->
     Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
   in
   Source source
 
 let with_json ?compression:alg req ?format ?number_format w v =
-  let open Vif_stream in
+  let open Flux in
   let fn bqueue =
     let fn slice =
       if Bytesrw.Bytes.Slice.is_eod slice then Bqueue.close bqueue
@@ -148,7 +148,7 @@ let with_json ?compression:alg req ?format ?number_format w v =
     | Ok () -> ()
     | Error msg -> Fmt.failwith "Vif.Response.with_json: %s" msg
   in
-  let src = Source.with_task ~limit:10 fn in
+  let src = Source.with_task ~size:0x7ff fn in
   let none = return false in
   let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
   let field = "transfer-encoding" in
@@ -192,7 +192,7 @@ let response ?headers:(hdrs = []) status req0 =
         Logs.debug ~src (fun m -> m "<- close the response body");
         H1.Body.Writer.close body
       in
-      (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
+      (Sink { init; push; full; stop } : (string, unit) Flux.sink)
   | `V2 reqd ->
       let hdrs = H2.Headers.of_list hdrs in
       let resp = H2.Response.create ~headers:hdrs status in
@@ -203,7 +203,7 @@ let response ?headers:(hdrs = []) status req0 =
       in
       let full _ = false in
       let stop = H2.Body.Writer.close in
-      (Sink { init; push; full; stop } : (string, unit) Vif_stream.sink)
+      (Sink { init; push; full; stop } : (string, unit) Flux.sink)
 
 let upgrade ?headers:(hdrs = []) req0 =
   match Vif_request0.reqd req0 with
@@ -256,7 +256,7 @@ let run : type a p q.
     | Empty, String str ->
         if Vif_request0.version req = 1 then
           headers := Vif_headers.add_unless_exists !headers "connection" "close";
-        (Filled (Vif_stream.Source.list [ str ]), ())
+        (Filled (Flux.Source.list [ str ]), ())
     | Empty, Websocket -> begin
         match get_nonce req with
         | None -> assert false (* TODO *)
@@ -275,22 +275,29 @@ let run : type a p q.
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, Vif_stream.Flow.deflate ())
+              let cfg = Flux_zl.config () in
+              let to_bstr = Flux.Flow.bstr ~len:0x7ff in
+              let flow = Flux.Flow.compose to_bstr (Flux_zl.deflate cfg) in
+              (headers, flow)
           | Some "gzip" ->
               let headers = Vif_headers.rem headers "content-length" in
               let headers =
                 Vif_headers.add_unless_exists headers "transfer-encoding"
                   "chunked"
               in
-              (headers, Vif_stream.Flow.gzip now)
-          | _ -> (headers, Vif_stream.Flow.identity)
+              let mtime = now () in
+              let cfg = Flux_gz.config ~mtime () in
+              let to_bstr = Flux.Flow.bstr ~len:0x7ff in
+              let flow = Flux.Flow.compose to_bstr (Flux_gz.deflate cfg) in
+              (headers, flow)
+          | _ -> (headers, Flux.Flow.identity)
         in
         Logs.debug ~src (fun m ->
             m "new response with: @[<hov>%a@]" Vif_headers.pp headers);
         let into = response ~headers status req in
         Logs.debug ~src (fun m -> m "run our stream to send a response");
-        let (), src = Vif_stream.Stream.run ~from ~via ~into in
-        Option.iter Vif_stream.Source.dispose src;
+        let (), src = Flux.Stream.run ~from ~via ~into in
+        Option.iter Flux.Source.dispose src;
         (Sent, ())
   in
   go s t
