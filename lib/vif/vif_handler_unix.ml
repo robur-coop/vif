@@ -4,13 +4,16 @@ type ('c, 'value) t = (Httpcats.Server.flow, 'c, 'value) Handler.t
 
 let pwd = Fpath.v (Unix.getcwd ())
 let tree = Conan_light.tree
+let ( let@ ) finally fn = Fun.protect ~finally fn
 
 let file ?offset path =
   let open Flux in
   let buf = Bytes.create 0x7ff in
   let fn bqueue =
     let fd = Unix.openfile path Unix.[ O_RDONLY ] 0o644 in
-    let finally () = Unix.close fd in
+    let resource = Miou.Ownership.create ~finally:Unix.close fd in
+    Miou.Ownership.own resource;
+    let@ () = fun () -> Miou.Ownership.release fd; Bqueue.close bqueue in
     let _ =
       match offset with
       | Some offset -> Unix.lseek fd offset Unix.SEEK_SET
@@ -18,13 +21,11 @@ let file ?offset path =
     in
     let rec go () =
       let len = Unix.read fd buf 0 (Bytes.length buf) in
-      if len > 0 then begin
+      if len > 0 then (
         let str = Bytes.sub_string buf 0 len in
-        Bqueue.put bqueue str; go ()
-      end
-      else Bqueue.close bqueue
+        Bqueue.put bqueue str; go ())
     in
-    Fun.protect ~finally go
+    go ()
   in
   Source.with_task ~size:0x7ff fn
 
