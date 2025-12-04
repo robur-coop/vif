@@ -89,7 +89,9 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
   let tls = with_tls socket in
   let on_localhost = is_localhost socket in
   let tags = Logs.Tag.empty in
-  let tags = Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags in
+  let tags =
+    Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags
+  in
   let queries = Pct.query_of_target target in
   { request; tls; reqd; socket; on_localhost; body; queries; tags }
 
@@ -129,7 +131,7 @@ let source { reqd; tags; _ } =
   Log.debug (fun m -> m ~tags "the user request for a source of the request");
   to_source ~src reqd
 
-let close { body; tags;_ } =
+let close { body; tags; _ } =
   Log.debug (fun m -> m ~tags "close the reader body");
   match body with
   | `V1 body -> H1.Body.Reader.close body

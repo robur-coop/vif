@@ -90,15 +90,14 @@ module Phrase = struct
                     m "shift location to %a" pp_lexing_position startpos);
                 Lexbuf.shift_location_error pos_fname startpos error
           in
-          begin
-            if lexbuf.Lexing.lex_last_action <> Lexbuf.semisemi_action then
-              let rec go () =
-                match Lexer.token lexbuf with
-                | Parser.SEMISEMI | Parser.EOF -> ()
-                | exception Lexer.Error (_, _) -> ()
-                | _ -> go ()
-              in
-              go ()
+          begin if lexbuf.Lexing.lex_last_action <> Lexbuf.semisemi_action then
+            let rec go () =
+              match Lexer.token lexbuf with
+              | Parser.SEMISEMI | Parser.EOF -> ()
+              | exception Lexer.Error (_, _) -> ()
+              | _ -> go ()
+            in
+            go ()
           end;
           Error exn
     in
@@ -143,12 +142,11 @@ let load cfg str =
       | Some (dir :: _) -> to_dir_path (path / dir)
       | Some [] | None -> path
     in
-    begin
-      match List.assoc_opt "ppx" descr with
-      | None | Some [] -> ()
-      | Some (ppx :: _) ->
-          let ppx = path / ppx in
-          Clflags.all_ppx := ppx :: !Clflags.all_ppx
+    begin match List.assoc_opt "ppx" descr with
+    | None | Some [] -> ()
+    | Some (ppx :: _) ->
+        let ppx = path / ppx in
+        Clflags.all_ppx := ppx :: !Clflags.all_ppx
     end;
     match List.assoc_opt "plugin" descr with
     | Some (plugin :: _) -> (path / plugin) :: acc

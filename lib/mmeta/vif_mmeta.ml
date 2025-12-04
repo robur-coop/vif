@@ -186,11 +186,10 @@ let rec predicates lexbuf acc =
     end
   | Minus ->
       let predicate = name lexbuf in
-      begin
-        match Vif_mmeta_lexer.token lexbuf with
-        | Comma -> predicates lexbuf (Exclude predicate :: acc)
-        | Rparen -> List.rev (Exclude predicate :: acc)
-        | token -> invalid_token lexbuf token
+      begin match Vif_mmeta_lexer.token lexbuf with
+      | Comma -> predicates lexbuf (Exclude predicate :: acc)
+      | Rparen -> List.rev (Exclude predicate :: acc)
+      | token -> invalid_token lexbuf token
       end
   | token -> invalid_token lexbuf token
 
@@ -216,15 +215,14 @@ let rec parser lexbuf depth acc =
           parser lexbuf depth (Add { name; predicates= []; value } :: acc)
       | Lparen ->
           let predicates = predicates lexbuf [] in
-          begin
-            match Vif_mmeta_lexer.token lexbuf with
-            | Equal ->
-                let value = string lexbuf in
-                parser lexbuf depth (Set { name; predicates; value } :: acc)
-            | Plus_equal ->
-                let value = string lexbuf in
-                parser lexbuf depth (Add { name; predicates; value } :: acc)
-            | token -> invalid_token lexbuf token
+          begin match Vif_mmeta_lexer.token lexbuf with
+          | Equal ->
+              let value = string lexbuf in
+              parser lexbuf depth (Set { name; predicates; value } :: acc)
+          | Plus_equal ->
+              let value = string lexbuf in
+              parser lexbuf depth (Add { name; predicates; value } :: acc)
+          | token -> invalid_token lexbuf token
           end
       | token -> invalid_token lexbuf token
     end

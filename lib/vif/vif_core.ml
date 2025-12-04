@@ -349,15 +349,14 @@ module Request = struct
     | { encoding= Multipart_form_encoding r; _ } as req ->
         let ( let* ) = Result.bind in
         let* raw = Multipart_form.parse req in
-        begin
-          try Ok (Multipart_form.get_record r raw) with
-          | Multipart_form.Field_not_found field -> Error (`Not_found field)
-          | exn ->
-              let tags = Vif_request.tags req in
-              Log.err (fun m ->
-                  m ~tags "Unexpected exception from multipart-form/data: %s"
-                    (Printexc.to_string exn));
-              Error `Invalid_multipart_form
+        begin try Ok (Multipart_form.get_record r raw) with
+        | Multipart_form.Field_not_found field -> Error (`Not_found field)
+        | exn ->
+            let tags = Vif_request.tags req in
+            Log.err (fun m ->
+                m ~tags "Unexpected exception from multipart-form/data: %s"
+                  (Printexc.to_string exn));
+            Error `Invalid_multipart_form
         end
     | { encoding= Multipart_form; _ } as req -> Ok (Multipart_form.stream req)
     | { encoding= Any; _ } -> assert false

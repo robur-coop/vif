@@ -30,10 +30,9 @@ let rec arg : type a v. t -> v -> (v, a) arg -> t * a =
   | Const v -> (devices, v)
   | Value k ->
       let[@warning "-8"] (Devices m) = devices in
-      begin
-        match Hmap.find k m with
-        | None -> failwithf "Device %s not found" (Hmap.Key.info k).name
-        | Some device -> (devices, device)
+      begin match Hmap.find k m with
+      | None -> failwithf "Device %s not found" (Hmap.Key.info k).name
+      | Some device -> (devices, device)
       end
   | Map (args, fn) ->
       let v = ref None in

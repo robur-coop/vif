@@ -54,24 +54,22 @@ let can_compress alg req =
   | `V1 reqd ->
       let req = H1.Reqd.request reqd in
       let hdrs = req.H1.Request.headers in
-      begin
-        match H1.Headers.get hdrs "accept-encoding" with
-        | None -> false
-        | Some str ->
-            let algs = String.split_on_char ',' str in
-            let algs = List.map String.trim algs in
-            List.exists (( = ) alg) algs
+      begin match H1.Headers.get hdrs "accept-encoding" with
+      | None -> false
+      | Some str ->
+          let algs = String.split_on_char ',' str in
+          let algs = List.map String.trim algs in
+          List.exists (( = ) alg) algs
       end
   | `V2 reqd ->
       let req = H2.Reqd.request reqd in
       let hdrs = req.H2.Request.headers in
-      begin
-        match H2.Headers.get hdrs "accept-encoding" with
-        | None -> false
-        | Some str ->
-            let algs = String.split_on_char ',' str in
-            let algs = List.map String.trim algs in
-            List.exists (( = ) alg) algs
+      begin match H2.Headers.get hdrs "accept-encoding" with
+      | None -> false
+      | Some str ->
+          let algs = String.split_on_char ',' str in
+          let algs = List.map String.trim algs in
+          List.exists (( = ) alg) algs
       end
 
 let compression alg req =

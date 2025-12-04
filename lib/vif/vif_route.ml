@@ -81,8 +81,8 @@ module Utils = struct
     let t = Array.make (List.length l_before) 0 in
     l_before
     |> List.iteri (fun i x ->
-           let j = find_idx count x l_after in
-           t.(i) <- offset + j);
+        let j = find_idx count x l_after in
+        t.(i) <- offset + j);
     t
 end
 

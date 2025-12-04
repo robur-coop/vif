@@ -13,7 +13,11 @@ let file ?offset path =
     let fd = Unix.openfile path Unix.[ O_RDONLY ] 0o644 in
     let resource = Miou.Ownership.create ~finally:Unix.close fd in
     Miou.Ownership.own resource;
-    let@ () = fun () -> Miou.Ownership.release resource; Bqueue.close bqueue in
+    let@ () =
+     fun () ->
+      Miou.Ownership.release resource;
+      Bqueue.close bqueue
+    in
     let _ =
       match offset with
       | Some offset -> Unix.lseek fd offset Unix.SEEK_SET
