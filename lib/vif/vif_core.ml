@@ -12,6 +12,11 @@ module Method = Vif_method
 module Status = Vif_status
 module Cookie = Vif_cookie
 module Route = Vif_route
+module Tags = Vif_tags
+
+let src = Logs.Src.create "vif.core"
+
+module Log = (val Logs.src_log src : Logs.LOG)
 
 module Uri = struct
   include Vif_uri
@@ -155,43 +160,44 @@ module Multipart_form = struct
        | `Done of string Flux.Bqueue.c Multipart_form.t
        | `Fail of string ]
 
-  let rec until_await ({ queue; parse; actives } as ctx) push acc str =
+  let rec until_await ~tags ({ queue; parse; actives } as ctx) push acc str =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.bqueue bqueue in
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
-        until_await ctx push acc str
+        until_await ~tags ctx push acc str
     | exception Queue.Empty -> begin
         match parse (`String str) with
         | `Continue -> `Continue (ctx, acc)
         | `Done _tree -> `Stop acc
         | `Fail msg ->
             List.iter Bqueue.close actives;
-            Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
+            Log.err (fun m -> m ~tags "Invalid multipart/form-data: %s" msg);
             `Stop acc
       end
 
-  let rec until_done ({ queue; parse; actives } as ctx) push acc =
+  let rec until_done ~tags ({ queue; parse; actives } as ctx) push acc =
     match Queue.pop queue with
     | `Id (header, bqueue) ->
         let src = Source.bqueue bqueue in
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
-        until_done ctx push acc
+        until_done ~tags ctx push acc
     | exception Queue.Empty -> begin
         match parse `Eof with
-        | `Continue -> until_done ctx push acc
+        | `Continue -> until_done ~tags ctx push acc
         | `Done _tree -> acc
         | `Fail msg ->
             List.iter Bqueue.close actives;
-            Logs.err (fun m -> m "Invalid multipart/form-data: %s" msg);
+            Log.err (fun m -> m ~tags "Invalid multipart/form-data: %s" msg);
             acc
       end
 
   let multipart_form req :
       (string, Multipart_form.Header.t * string source) flow =
     let hdrs = Vif_request.headers req in
+    let tags = Vif_request.tags req in
     let content_type =
       match Vif_headers.get hdrs "content-type" with
       | None -> Fmt.invalid_arg "Content-type field missing"
@@ -216,12 +222,12 @@ module Multipart_form = struct
       in
       let push state str =
         match state with
-        | `Continue (ctx, acc) -> until_await ctx k.push acc str
+        | `Continue (ctx, acc) -> until_await ~tags ctx k.push acc str
         | `Stop _ as state -> state
       in
       let full = function `Continue _ -> false | `Stop _ -> true in
       let stop = function
-        | `Continue (ctx, acc) -> k.stop (until_done ctx k.push acc)
+        | `Continue (ctx, acc) -> k.stop (until_done ~tags ctx k.push acc)
         | `Stop acc -> k.stop acc
       in
       Sink { init; stop; full; push }
@@ -347,8 +353,9 @@ module Request = struct
           try Ok (Multipart_form.get_record r raw) with
           | Multipart_form.Field_not_found field -> Error (`Not_found field)
           | exn ->
-              Logs.err (fun m ->
-                  m "Unexpected exception from multipart-form/data: %s"
+              let tags = Vif_request.tags req in
+              Log.err (fun m ->
+                  m ~tags "Unexpected exception from multipart-form/data: %s"
                     (Printexc.to_string exn));
               Error `Invalid_multipart_form
         end

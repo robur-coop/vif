@@ -20,7 +20,8 @@
   vif_response
   vif_route
   vif_status
-  vif_uri)
+  vif_uri
+  vif_tags)
  (libraries
   multipart_form
   multipart_form-miou
