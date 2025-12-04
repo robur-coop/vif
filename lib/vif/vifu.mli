@@ -278,6 +278,13 @@ module Response : sig
     -> string
     -> (empty, filled, unit) t
 
+  val with_text :
+       ?utf_8:bool
+    -> ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> string
+    -> (empty, filled, unit) t
+
   val with_tyxml :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
@@ -289,8 +296,8 @@ module Response : sig
     -> ('c, 'a) Request.t
     -> ?format:Jsont.format
     -> ?number_format:Jsont.number_format
-    -> 'a Jsont.t
-    -> 'a
+    -> 'v Jsont.t
+    -> 'v
     -> (empty, filled, unit) t
 
   val empty : (empty, filled, unit) t
