@@ -10,7 +10,7 @@ type 'socket t = {
   ; on_localhost: bool
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; queries: (string * string list) list
-  ; src: Logs.src
+  ; tags: Logs.Tag.set
 }
 
 and reqd = Httpcats_core.Server.reqd
@@ -47,7 +47,7 @@ let accept { request; _ } =
       let types = List.sort (fun (_, a) (_, b) -> Float.compare b a) types in
       List.map fst types
 
-let src { src; _ } = src
+let tags { tags; _ } = tags
 
 let to_source ~src ~schedule ~close body =
   Flux.Source.with_task ~size:0x7ff @@ fun bqueue ->
@@ -88,9 +88,10 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
   in
   let tls = with_tls socket in
   let on_localhost = is_localhost socket in
-  let src = Logs.Src.create (Fmt.str "vif:%s" (peer socket)) in
+  let tags = Logs.Tag.empty in
+  let tags = Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags in
   let queries = Pct.query_of_target target in
-  { request; tls; reqd; socket; on_localhost; body; queries; src }
+  { request; tls; reqd; socket; on_localhost; body; queries; tags }
 
 let headers { request; _ } =
   match request with
@@ -124,12 +125,12 @@ let tls { tls; _ } = tls
 let on_localhost { on_localhost; _ } = on_localhost
 let reqd { reqd; _ } = reqd
 
-let source { reqd; src; _ } =
-  Logs.debug ~src (fun m -> m "the user request for a source of the request");
+let source { reqd; tags; _ } =
+  Log.debug (fun m -> m ~tags "the user request for a source of the request");
   to_source ~src reqd
 
-let close { body; src; _ } =
-  Logs.debug ~src (fun m -> m "close the reader body");
+let close { body; tags;_ } =
+  Log.debug (fun m -> m ~tags "close the reader body");
   match body with
   | `V1 body -> H1.Body.Reader.close body
   | `V2 body -> H2.Body.Reader.close body

@@ -26,6 +26,7 @@ let reqd { request; _ } = Vif_request0.reqd request
 let source { request; _ } = Vif_request0.source request
 let accept { request; _ } = Vif_request0.accept request
 let close { request; _ } = Vif_request0.close request
+let tags { request; _ } = Vif_request0.tags request
 
 let to_string { request; _ } =
   let src = Vif_request0.source request in

@@ -203,25 +203,25 @@ let rec user's_functions daemon =
         let fn () = fn daemon.server daemon.user's_value in
         ignore (Miou.async ~orphans:daemon.orphans fn)
     | User's_request (req0, fn) ->
-        let src = Vif_core.Request0.src req0 in
-        Logs.debug ~src (fun m -> m "new user's request handler");
+        let tags = Vif_core.Request0.tags req0 in
+        Log.debug (fun m -> m ~tags "new user's request handler");
         let now () = Int32.of_float (Unix.gettimeofday ()) in
         let fn () =
           try
-            Logs.debug ~src (fun m -> m "run user's request handler");
+            Log.debug (fun m -> m ~tags "run user's request handler");
             let Vif_core.Response.Sent, () =
               Vif_core.Response.(run ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
-            Logs.debug ~src (fun m -> m "user's request handler terminated");
+            Log.debug (fun m -> m ~tags "user's request handler terminated");
             Vif_core.Request0.close req0
           with exn ->
             let bt = Printexc.get_raw_backtrace () in
-            Logs.err ~src (fun m ->
-                m "Unexpected exception from the user's handler: %s"
+            Log.err (fun m ->
+                m ~tags "Unexpected exception from the user's handler: %s"
                   (Printexc.to_string exn));
-            Logs.err ~src (fun m ->
-                m "%s" (Printexc.raw_backtrace_to_string bt));
+            Log.err (fun m ->
+                m ~tags "%s" (Printexc.raw_backtrace_to_string bt));
             Vif_core.Request0.report_exn req0 exn
         in
         ignore (Miou.async ~orphans:daemon.orphans fn)

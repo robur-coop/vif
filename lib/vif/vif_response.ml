@@ -167,7 +167,7 @@ let empty =
 let websocket = Websocket
 
 let response ?headers:(hdrs = []) status req0 =
-  let src = Vif_request0.src req0 in
+  let tags = Vif_request0.tags req0 in
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in
@@ -189,7 +189,7 @@ let response ?headers:(hdrs = []) status req0 =
       in
       let full = H1.Body.Writer.is_closed in
       let stop body =
-        Logs.debug ~src (fun m -> m "<- close the response body");
+        Log.debug (fun m -> m ~tags "<- close the response body");
         H1.Body.Writer.close body
       in
       (Sink { init; push; full; stop } : (string, unit) Flux.sink)
@@ -228,7 +228,7 @@ let run : type a p q.
     -> q state * a =
  fun ~now req s t ->
   let headers = ref [] in
-  let src = Vif_request0.src req in
+  let tags = Vif_request0.tags req in
   let rec go : type a p q. p state -> (p, q, a) t -> q state * a =
    fun s t ->
     match (s, t) with
@@ -292,10 +292,10 @@ let run : type a p q.
               (headers, flow)
           | _ -> (headers, Flux.Flow.identity)
         in
-        Logs.debug ~src (fun m ->
-            m "new response with: @[<hov>%a@]" Vif_headers.pp headers);
+        Log.debug (fun m ->
+            m ~tags "new response with: @[<hov>%a@]" Vif_headers.pp headers);
         let into = response ~headers status req in
-        Logs.debug ~src (fun m -> m "run our stream to send a response");
+        Log.debug (fun m -> m ~tags "run our stream to send a response");
         let (), src = Flux.Stream.run ~from ~via ~into in
         Option.iter Flux.Source.dispose src;
         (Sent, ())
