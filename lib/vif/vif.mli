@@ -143,7 +143,7 @@ module Uri : sig
       In other words, [Uri] provides a module for {i typing} URIs (and, by
       extension, the routes that can be specified to Vif). *)
 
-  type 'a atom = 'a Tyre.t
+  type 'a atom = (Tyre.evaluable, 'a) Tyre.t
   (** Type of a typed element that makes up the path and/or queries of a URI. *)
 
   val int : int atom

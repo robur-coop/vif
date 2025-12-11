@@ -4,7 +4,7 @@
    Copyright (c) 2025 Romain Calascibetta <romain.calascibetta@gmail.com>
 *)
 
-type 'a atom = 'a Tyre.t
+type 'a atom = (Tyre.evaluable, 'a) Tyre.t
 
 type ('fu, 'return) path =
   | Host : string -> ('r, 'r) path
@@ -69,7 +69,8 @@ let ( //? ) path query = Url.make ~slash:Slash path query
 let ( /?? ) path query = Url.make ~slash:Maybe_slash path query
 let eval_atom p x = Tyre.(eval (Internal.to_t p) x)
 
-let eval_top_atom : type a. a Tyre.Internal.raw -> a -> string list = function
+let eval_top_atom : type a.
+    (Tyre.evaluable, a) Tyre.Internal.raw -> a -> string list = function
   | Opt p -> ( function None -> [] | Some x -> [ eval_atom p x ])
   | Rep p -> fun l -> List.of_seq (Seq.map (eval_atom p) l)
   | e -> fun x -> [ eval_atom e x ]

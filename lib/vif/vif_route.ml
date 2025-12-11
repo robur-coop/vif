@@ -95,7 +95,8 @@ type 'a re_atom = 'a Tyre.Internal.wit
 (** Top level atoms are specialized for path and query, see documentation. *)
 let re_atom re = Tyre.Internal.build re
 
-let re_atom_path : type a. int -> a raw -> int * a re_atom * Re.t list =
+let re_atom_path : type a.
+    int -> (Tyre.evaluable, a) raw -> int * a re_atom * Re.t list =
   let open Re in
   fun i -> function
     | Rep e ->
@@ -111,7 +112,8 @@ let re_atom_path : type a. int -> a raw -> int * a re_atom * Re.t list =
         let i', w, re = re_atom i e in
         (i', w, [ Ext.slash; re ])
 
-let re_atom_query : type a. int -> a raw -> int * a re_atom * Re.t =
+let re_atom_query : type a.
+    int -> (Tyre.evaluable, a) raw -> int * a re_atom * Re.t =
   let open Re in
   fun i -> function
     | Rep e ->
@@ -167,6 +169,8 @@ let rec shift_lits : type a. int -> a re_atom -> a re_atom =
   | Alt (m, x1, x2) -> Alt (m, shift_lits shift x1, shift_lits shift x2)
   | Seq (x1, x2) -> Seq (shift_lits shift x1, shift_lits shift x2)
   | Rep (i, x, r) -> Rep (shift + i, x, r)
+  | Map (x, f) -> Map (shift_lits shift x, f)
+  | Either (m, a, b) -> Either (m, shift_lits shift a, shift_lits shift b)
 
 let rec permut_query : type r f.
     int -> int array -> (r, f) re_query -> (r, f) re_query =

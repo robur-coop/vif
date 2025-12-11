@@ -1,5 +1,5 @@
 module Uri : sig
-  type 'a atom = 'a Tyre.t
+  type 'a atom = (Tyre.evaluable, 'a) Tyre.t
 
   val int : int atom
   val string : [ `Path | `Query_value ] -> string atom
