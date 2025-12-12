@@ -143,41 +143,41 @@ module Uri : sig
       In other words, [Uri] provides a module for {i typing} URIs (and, by
       extension, the routes that can be specified to Vif). *)
 
-  type 'a atom = (Tyre.evaluable, 'a) Tyre.t
+  type ('e, 'a) atom = ('e, 'a) Tyre.t
   (** Type of a typed element that makes up the path and/or queries of a URI. *)
 
-  val int : int atom
+  val int : (_, int) atom
   (** [int] is a typed element which recognizes an integer and cast it as OCaml
       [int]. *)
 
-  val string : [ `Path | `Query_value ] -> string atom
+  val string : [ `Path | `Query_value ] -> (_, string) atom
   (** [string where] is a typed element which recognizes a string. This element
       can be located into a {!type:path} (and, in this case, [`Path] must be
       used) or as a {!type:query} parameter of an URI (and, in this case,
       [`Query_value] must be used). *)
 
-  val bool : bool atom
+  val bool : (_, bool) atom
   (** [bool] is a typed element which recognizes [true] or [false] and cast it
       as an OCaml [bool]. *)
 
-  val float : float atom
+  val float : (_, float) atom
   (** [float] is a typed element which recognize a decimal number and cast it as
       an OCaml [float]. *)
 
-  val rest : string atom
+  val rest : (_, string) atom
   (** [rest] is a typed element which recognize anything (including ['/'] and
       ['?']; that is, including {i queries} part of the path). It's useful for
       obtaining (or generating) the end/{i rest} of an URI. *)
 
-  val path : string atom
+  val path : (_, string) atom
   (** [path] is a typed element which recognize anything (including ['/'])
       except the {i queries} part of the path (like [?foo=bar]). It's useful for
       obtaining (or generating) the end of an URI path. *)
 
-  val option : 'a atom -> 'a option atom
+  val option : ('e, 'a) atom -> ('e, 'a option) atom
   (** [option t] takes a typed element and make it optional. *)
 
-  val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
+  val conv : ('a -> 'b) -> ('b -> 'a) -> ('e, 'a) atom -> ('e, 'b) atom
   (** [conv inj prj] creates a new typed element which produces/expects an other
       typed value. [inj] describes how to cast a ['a] value to a ['b] value and
       [prj] describes how to caset a ['b] value to a ['a]. If [inj] raises the
@@ -205,74 +205,75 @@ module Uri : sig
           Vif.Uri.conv inj prj v
       ]} *)
 
-  type ('f, 'r) path
+  type ('e, 'f, 'r) path
   (** Type of the path part of an URI. *)
 
-  val rel : ('r, 'r) path
+  val rel : ('e, 'r, 'r) path
   (** [rel] describes the root of a URI. In this case, the URI based on [rel] is
       relative to any {i host}. *)
 
-  val host : string -> ('r, 'r) path
+  val host : string -> (_, 'r, 'r) path
   (** [host v] is a specific host (like [localhost]) that the URI based on it
       must respect (if the URI is used as route) or generate. *)
 
-  val ( / ) : ('f, 'r) path -> string -> ('f, 'r) path
+  val ( / ) : ('e, 'f, 'r) path -> string -> ('e, 'f, 'r) path
   (** [p / "foo"] operator extends a given path [p] with a new constant part
       ["foo"]. *)
 
-  val ( /% ) : ('f, 'a -> 'r) path -> 'a atom -> ('f, 'r) path
+  val ( /% ) : ('e, 'f, 'a -> 'r) path -> ('e, 'a) atom -> ('e, 'f, 'r) path
   (** [p /% v] operator extends a given path [p] with a new {!type:atom} [v]. *)
 
-  type ('f, 'r) query
+  type ('e, 'f, 'r) query
   (** Type of the query part of an URI. *)
 
-  val nil : ('r, 'r) query
+  val nil : ('e, 'r, 'r) query
   (** [nil] specifies that the URI has no parameters. If the URI is used to
       specify a route, this means that a request with even one parameter would
       {b not} be recognised with [nil]. If you want to recognise a URI with
       possible parameters, we recommend using {!val:any}. *)
 
-  val any : ('r, 'r) query
+  val any : ('e, 'r, 'r) query
   (** [any] specifies that a URI can have no parameters or multiple parameters.
       It is usually [any] that is preferred to {!val:nil} in the specification
       of a route. *)
 
-  val ( ** ) : string * 'a atom -> ('f, 'r) query -> ('a -> 'f, 'r) query
+  val ( ** ) :
+    string * ('e, 'a) atom -> ('e, 'f, 'r) query -> ('e, 'a -> 'f, 'r) query
   (** [q ** ("foo", v)] is an operator that allows you to add a new parameter
       ["foo"] with a value whose type is specified by [v] to the list of given
       parameters [q]. *)
 
-  type ('f, 'r) t
+  type ('e, 'f, 'r) t
   (** Type of an URI. *)
 
-  val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( /? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   (** [path /? queries] is an operator which permits to construct an URI where
       the slash at the end of the given path [path] is not required (to delimit
       queries then). *)
 
-  val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( //? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   (** [path //? queries] is an operator which permits to construct an URI where
       the slash at theend of the given path [path] {b is required} and delimit
       queries then. *)
 
-  val ( /?? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
+  val ( /?? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   (** [path /?? queries] is an operator which permits to construct an URI where
       the slash is {b optionnal} between the given path [path] and queries. *)
 
-  val keval : ?slash:bool -> ('f, 'r) t -> (string -> 'r) -> 'f
+  val keval : ?slash:bool -> (Tyre.evaluable, 'f, 'r) t -> (string -> 'r) -> 'f
   (** [keval ?slash uri fn] compiles an URI [uri] into a [string] and pass it to
       [fn]. *)
 
-  val eval : ?slash:bool -> ('f, string) t -> 'f
+  val eval : ?slash:bool -> (Tyre.evaluable, 'f, string) t -> 'f
   (** [eval ?slash uri] compiles an URI [uri] into a [string]. *)
 
-  val execp : (_, _) t -> string -> bool
+  val execp : (_, _, _) t -> string -> bool
   (** [execp uri str] tests if [str] matches the regular expression for [uri].
       Note that even if [execp uri str] is [true] the converters of [uri] may
       fail. *)
 
   val extract :
-       ('f, 'r) t
+       ('e, 'f, 'r) t
     -> string
     -> 'f
     -> ('r, [ `Converter_failure of exn | `No_match ]) result
@@ -583,23 +584,32 @@ module Route : sig
   type 'r t
   type ('fu, 'return) route
 
-  val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val get : ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [get uri] describes a route which matches a [GET] request with the given
       path [uri]. a [GET] request does not have any contents. *)
 
-  val head : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val head : ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [head uri] describes a route which matches a [HEAD] request with the given
       path [uri]. A [HEAD] request does not have any contents. *)
 
-  val delete : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val delete :
+    ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [delete uri] describes a route which matches a [DELETE] request with the
       given path [uri]. A [DELETE] request does not have any contents. *)
 
   val post :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a) Request.t -> 'x, 'r) route
+  (** [post ty uri] describes a route which matches a [POST] request with a
+      certain [Content-Type] described by [ty] and with the given path [uri]. *)
 
   val put :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a) Request.t -> 'x, 'r) route
+  (** [put ty uri] describes a route which matches a [PUT] request with a
+      certain [Content-Type] described by [ty] and with the given path [uri]. *)
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
   (** [r --> f] associates a route [r] to a handler [f]. *)
@@ -626,7 +636,7 @@ module Client : sig
     -> ?max_redirect:int
     -> ?follow_redirect:bool
     -> ?resolver:resolver
-    -> ('a, response) Uri.t
+    -> (Tyre.evaluable, 'a, response) Uri.t
     -> 'a
 
   (** {3:example-client Examples.}
@@ -970,7 +980,7 @@ module Response : sig
   val redirect_to :
        ?with_get:bool
     -> ('c, 'a) Request.t
-    -> ('r, (filled, sent, unit) t) Uri.t
+    -> (Tyre.evaluable, 'r, (filled, sent, unit) t) Uri.t
     -> 'r
   (** [redirect_to ?with_get req uri] responds a redirection to [uri] to the
       client. *)
