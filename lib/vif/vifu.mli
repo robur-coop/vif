@@ -1,35 +1,37 @@
 module Uri : sig
-  type 'a atom = 'a Tyre.t
+  type ('e, 'a) atom = ('e, 'a) Tyre.t
 
-  val int : int atom
-  val string : [ `Path | `Query_value ] -> string atom
-  val bool : bool atom
-  val float : float atom
-  val rest : string atom
-  val path : string atom
-  val option : 'a atom -> 'a option atom
-  val conv : ('a -> 'b) -> ('b -> 'a) -> 'a atom -> 'b atom
+  val int : (_, int) atom
+  val string : [ `Path | `Query_value ] -> (_, string) atom
+  val bool : (_, bool) atom
+  val float : (_, float) atom
+  val rest : (_, string) atom
+  val path : (_, string) atom
+  val option : ('e, 'a) atom -> ('e, 'a option) atom
+  val conv : ('a -> 'b) -> ('b -> 'a) -> ('e, 'a) atom -> ('e, 'b) atom
 
-  type ('f, 'r) path
+  type ('e, 'f, 'r) path
 
-  val rel : ('r, 'r) path
-  val host : string -> ('r, 'r) path
-  val ( / ) : ('f, 'r) path -> string -> ('f, 'r) path
-  val ( /% ) : ('f, 'a -> 'r) path -> 'a atom -> ('f, 'r) path
+  val rel : (_, 'r, 'r) path
+  val host : string -> (_, 'r, 'r) path
+  val ( / ) : ('e, 'f, 'r) path -> string -> ('e, 'f, 'r) path
+  val ( /% ) : ('e, 'f, 'a -> 'r) path -> ('e, 'a) atom -> ('e, 'f, 'r) path
 
-  type ('f, 'r) query
+  type ('e, 'f, 'r) query
 
-  val nil : ('r, 'r) query
-  val any : ('r, 'r) query
-  val ( ** ) : string * 'a atom -> ('f, 'r) query -> ('a -> 'f, 'r) query
+  val nil : (_, 'r, 'r) query
+  val any : (_, 'r, 'r) query
 
-  type ('f, 'r) t
+  val ( ** ) :
+    string * ('e, 'a) atom -> ('e, 'f, 'r) query -> ('e, 'a -> 'f, 'r) query
 
-  val ( /? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
-  val ( //? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
-  val ( /?? ) : ('f, 'x) path -> ('x, 'r) query -> ('f, 'r) t
-  val keval : ?slash:bool -> ('f, 'r) t -> (string -> 'r) -> 'f
-  val eval : ?slash:bool -> ('f, string) t -> 'f
+  type ('e, 'f, 'r) t
+
+  val ( /? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
+  val ( //? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
+  val ( /?? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
+  val keval : ?slash:bool -> (Tyre.evaluable, 'f, 'r) t -> (string -> 'r) -> 'f
+  val eval : ?slash:bool -> (Tyre.evaluable, 'f, string) t -> 'f
 end
 
 module Json = Vif_core.Json
@@ -136,15 +138,21 @@ module Route : sig
   type 'r t
   type ('fu, 'return) route
 
-  val get : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
-  val head : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
-  val delete : ('x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val get : ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  val head : ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+
+  val delete :
+    ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
 
   val post :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val put :
-    ('c, 'a) Type.t -> ('x, 'r) Uri.t -> (('c, 'a) Request.t -> 'x, 'r) route
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a) Request.t -> 'x, 'r) route
 
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
 end
@@ -307,7 +315,7 @@ module Response : sig
   val redirect_to :
        ?with_get:bool
     -> ('c, 'a) Request.t
-    -> ('r, (filled, sent, unit) t) Uri.t
+    -> (Tyre.evaluable, 'r, (filled, sent, unit) t) Uri.t
     -> 'r
 
   val add : field:string -> string -> ('p, 'p, unit) t
