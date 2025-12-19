@@ -4,21 +4,25 @@
    Copyright (c) 2025 Romain Calascibetta <romain.calascibetta@gmail.com>
 *)
 
-type 'a atom = 'a Tyre.t
+type ('e, 'a) atom = ('e, 'a) Tyre.t
 
-type ('fu, 'return) path =
-  | Host : string -> ('r, 'r) path
-  | Rel : ('r, 'r) path
-  | Path_const : ('f, 'r) path * string -> ('f, 'r) path
-  | Path_atom : ('f, 'a -> 'r) path * 'a atom -> ('f, 'r) path
+type ('e, 'fu, 'return) path =
+  | Host : string -> ('e, 'r, 'r) path
+  | Rel : ('e, 'r, 'r) path
+  | Path_const : ('e, 'f, 'r) path * string -> ('e, 'f, 'r) path
+  | Path_atom : ('e, 'f, 'a -> 'r) path * ('e, 'a) atom -> ('e, 'f, 'r) path
 
-type ('fu, 'return) query =
-  | Nil : ('r, 'r) query
-  | Any : ('r, 'r) query
-  | Query_atom : string * 'a atom * ('f, 'r) query -> ('a -> 'f, 'r) query
+type ('e, 'fu, 'return) query =
+  | Nil : ('e, 'r, 'r) query
+  | Any : ('e, 'r, 'r) query
+  | Query_atom :
+      string * ('e, 'a) atom * ('e, 'f, 'r) query
+      -> ('e, 'a -> 'f, 'r) query
 
 type slash = Slash | No_slash | Maybe_slash
-type ('f, 'r) t = Url : slash * ('f, 'x) path * ('x, 'r) query -> ('f, 'r) t
+
+type ('e, 'f, 'r) t =
+  | Url : slash * ('e, 'f, 'x) path * ('e, 'x, 'r) query -> ('e, 'f, 'r) t
 
 module Path = struct
   let host str = Host str
@@ -26,7 +30,8 @@ module Path = struct
   let add path str = Path_const (path, str)
   let add_atom path atom = Path_atom (path, atom)
 
-  let rec _concat : type f r x. (f, x) path -> (x, r) path -> (f, r) path =
+  let rec _concat : type e f r x.
+      (e, f, x) path -> (e, x, r) path -> (e, f, r) path =
    fun p1 p2 ->
     match p2 with
     | Host _ -> p1
@@ -40,12 +45,13 @@ module Query = struct
   let any = Any
   let add n x query = Query_atom (n, x, query)
 
-  let rec make_any : type f r. (f, r) query -> (f, r) query = function
+  let rec make_any : type e f r. (e, f, r) query -> (e, f, r) query = function
     | Nil -> Any
     | Any -> Any
     | Query_atom (n, x, q) -> Query_atom (n, x, make_any q)
 
-  let rec _concat : type f r x. (f, x) query -> (x, r) query -> (f, r) query =
+  let rec _concat : type e f r x.
+      (e, f, x) query -> (e, x, r) query -> (e, f, r) query =
    fun q1 q2 ->
     match q1 with
     | Nil -> q2
@@ -69,13 +75,14 @@ let ( //? ) path query = Url.make ~slash:Slash path query
 let ( /?? ) path query = Url.make ~slash:Maybe_slash path query
 let eval_atom p x = Tyre.(eval (Internal.to_t p) x)
 
-let eval_top_atom : type a. a Tyre.Internal.raw -> a -> string list = function
+let eval_top_atom : type a.
+    (Tyre.evaluable, a) Tyre.Internal.raw -> a -> string list = function
   | Opt p -> ( function None -> [] | Some x -> [ eval_atom p x ])
   | Rep p -> fun l -> List.of_seq (Seq.map (eval_atom p) l)
   | e -> fun x -> [ eval_atom e x ]
 
 let rec eval_path : type r f.
-    (f, r) path -> (string option -> string list -> r) -> f =
+    (Tyre.evaluable, f, r) path -> (string option -> string list -> r) -> f =
  fun p k ->
   match p with
   | Host str -> k (Some str) []
@@ -86,7 +93,7 @@ let rec eval_path : type r f.
       eval_path p fn
 
 let rec eval_query : type r f.
-    (f, r) query -> ((string * string list) list -> r) -> f =
+    (Tyre.evaluable, f, r) query -> ((string * string list) list -> r) -> f =
  fun q k ->
   match q with
   | Nil -> k []
@@ -96,7 +103,7 @@ let rec eval_query : type r f.
         let fn r = k ((n, eval_top_atom (Tyre.Internal.from_t a) x) :: r) in
         eval_query q fn
 
-let keval : ?slash:bool -> ('a, 'b) t -> (string -> 'b) -> 'a =
+let keval : ?slash:bool -> (Tyre.evaluable, 'a, 'b) t -> (string -> 'b) -> 'a =
  fun ?slash:(force = false) (Url (slash, p, q)) k ->
   eval_path p @@ fun host path ->
   eval_query q @@ fun query ->

@@ -25,7 +25,7 @@ module Route = struct
   type ('fu, 'return) route =
     | Handler :
         (Httpcats.Server.flow, 'f, 'x) Vif_core.Route.req
-        * ('x, 'r) Vif_core.Uri.t
+        * ('e, 'x, 'r) Vif_core.Uri.t
         -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)

@@ -45,7 +45,7 @@ module Route = struct
 
   type ('fu, 'return) route =
     | Handler :
-        (Mhttp.flow, 'f, 'x) Vif_core.Route.req * ('x, 'r) Vif_core.Uri.t
+        (Mhttp.flow, 'f, 'x) Vif_core.Route.req * ('e, 'x, 'r) Vif_core.Uri.t
         -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
