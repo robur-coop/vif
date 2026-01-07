@@ -47,14 +47,11 @@ let caqti =
 
 let index username : Tyxml_html.doc =
   let open Tyxml in
-  let%html index username =
-    {html|<html>
-    <head><title>My Vif Website!</title></head>
-    <body>
-      <p>Hello |html} username {html| !</p>
-    </body>
-    </html>|html} in
-  index [ Tyxml.Html.txt username ]
+  let index username =
+    Html.html
+      (Html.head (Html.title (Html.txt "My Vif Website!")) [])
+      (Html.body [ Html.p [ Html.txt "Hello "; username ] ]) in
+  index (Tyxml.Html.txt username)
 
 let index req _server _env =
   let open Vif.Response.Syntax in
