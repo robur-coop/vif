@@ -928,6 +928,12 @@ module Response : sig
     -> (empty, filled, unit) t
   (** [with_string req src] responds the given stream [src] to the client. *)
 
+  val with_stream :
+       ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> string Flux.stream
+    -> (empty, filled, unit) t
+
   val with_string :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
