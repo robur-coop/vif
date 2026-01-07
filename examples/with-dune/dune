@@ -1,8 +1,6 @@
 (executable
  (name main)
  (modules main)
- (preprocess
-  (pps tyxml-ppx))
  (libraries vif jwto caqti-miou caqti-miou.unix caqti-driver-sqlite3))
 
 (executable
