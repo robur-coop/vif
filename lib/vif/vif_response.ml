@@ -8,7 +8,7 @@ and sent = Sent
 
 type 'a state =
   | Empty : empty state
-  | Filled : string Flux.source -> filled state
+  | Filled : string Flux.stream -> filled state
   | Sent : sent state
 
 let _empty = Empty
@@ -23,6 +23,7 @@ type ('p, 'q, 'a) t =
   | Return : 'a -> ('p, 'p, 'a) t
   | Bind : ('p, 'q, 'a) t * ('a -> ('q, 'r, 'b) t) -> ('p, 'r, 'b) t
   | Source : string Flux.source -> (empty, filled, unit) t
+  | Stream : string Flux.stream -> (empty, filled, unit) t
   | String : string -> (empty, filled, unit) t
   | Websocket : (empty, sent, unit) t
   | Respond : Vif_status.t -> (filled, sent, unit) t
@@ -91,6 +92,14 @@ let with_source ?compression:alg req source =
   let v = "chunked" in
   let* _ = add_unless_exists ~field v in
   Source source
+
+let with_stream ?compression:alg req stream =
+  let none = return false in
+  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+  let field = "transfer-encoding" in
+  let v = "chunked" in
+  let* _ = add_unless_exists ~field v in
+  Stream stream
 
 let connection_close req =
   match Vif_request.version req with
@@ -250,11 +259,12 @@ let run : type a p q.
     | state, Set_header (k, v) ->
         headers := (k, v) :: Vif_headers.rem !headers k;
         (state, ())
-    | Empty, Source from -> (Filled from, ())
+    | Empty, Source from -> (Filled (Flux.Stream.from from), ())
+    | Empty, Stream stream -> (Filled stream, ())
     | Empty, String str ->
         if Vif_request0.version req = 1 then
           headers := Vif_headers.add_unless_exists !headers "connection" "close";
-        (Filled (Flux.Source.list [ str ]), ())
+        (Filled (Flux.Source.list [ str ] |> Flux.Stream.from), ())
     | Empty, Websocket -> begin
         match get_nonce req with
         | None -> assert false (* TODO *)
@@ -263,7 +273,7 @@ let run : type a p q.
             let headers = H1.Headers.to_list hdrs1 in
             upgrade ~headers req; (Sent, ())
       end
-    | Filled from, Respond status ->
+    | Filled stream, Respond status ->
         let headers = !headers in
         let headers, via =
           match Vif_headers.get headers "content-encoding" with
@@ -294,8 +304,8 @@ let run : type a p q.
             m ~tags "new response with: @[<hov>%a@]" Vif_headers.pp headers);
         let into = response ~headers status req in
         Log.debug (fun m -> m ~tags "run our stream to send a response");
-        let (), src = Flux.Stream.run ~from ~via ~into in
-        Option.iter Flux.Source.dispose src;
+        let stream = Flux.Stream.via via stream in
+        Flux.Stream.into into stream;
         (Sent, ())
   in
   go s t

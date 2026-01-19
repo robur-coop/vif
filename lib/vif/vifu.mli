@@ -280,6 +280,12 @@ module Response : sig
     -> string Flux.source
     -> (empty, filled, unit) t
 
+  val with_stream :
+       ?compression:[> `DEFLATE | `Gzip ]
+    -> ('c, 'a) Request.t
+    -> string Flux.stream
+    -> (empty, filled, unit) t
+
   val with_string :
        ?compression:[> `DEFLATE | `Gzip ]
     -> ('c, 'a) Request.t
