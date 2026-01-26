@@ -34,8 +34,6 @@ module Uri : sig
   val eval : ?slash:bool -> (Tyre.evaluable, 'f, string) t -> 'f
 end
 
-module Json = Vif_core.Json
-
 module Headers : sig
   type t = (string * string) list
 
@@ -93,7 +91,6 @@ module Type : sig
   type ('c, 'a) t
 
   val null : (null, unit) t
-  val json : (json, Json.t) t
   val json_encoding : 'a Jsont.t -> (json, 'a) t
   val m : 'a Multipart_form.t -> (multipart_form, 'a) t
   val multipart_form : (multipart_form, Multipart_form.stream) t
@@ -112,7 +109,7 @@ module Request : sig
   val version : ('c, 'a) t -> int
   val headers : ('c, 'a) t -> Headers.t
   val accept : ('c, 'a) t -> string list
-  val of_json : (Type.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val of_json : (Type.json, 'a) t -> ('a, [> `Msg of string ]) result
 
   val of_multipart_form :
        (Type.multipart_form, 'a) t

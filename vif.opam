@@ -22,7 +22,6 @@ depends: [
   "httpcats" {>= "0.1.0"}
   "tyre" {>= "1.0"}
   "mirage-crypto-rng-miou-unix"
-  "jsonm" {>= "1.0.2"}
   "decompress" {>= "1.5.0"}
   "conan-unix" {>= "0.0.6"}
   "conan-database"

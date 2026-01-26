@@ -4,7 +4,6 @@
  (modules
   vif_core
   pct
-  json
   vif_server
   vif_type
   vif_cookie
