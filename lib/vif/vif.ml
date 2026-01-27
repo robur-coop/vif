@@ -1,7 +1,6 @@
 let src = Logs.Src.create "vif"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Json = Vif_core.Json
 module Uri = Vif_core.Uri
 module Client = Vif_client_unix
 module Device = Vif_core.Device

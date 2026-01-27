@@ -2,7 +2,6 @@ module Handler = Vif_handler
 module Request0 = Vif_request0
 module Headers = Vif_headers
 module Response = Vif_response
-module Json = Json
 module Type = Vif_type
 module Device = Vif_device
 module Server = Vif_server
@@ -122,13 +121,6 @@ let recognize_request ~env req0 =
     | Multipart_form_encoding _ as encoding ->
         let c = content_type req0 in
         let type_match = Result.map is_multipart_form_data c in
-        let type_match = Result.value ~default:false type_match in
-        if type_match && meth_match then
-          Some (Vif_request.of_req0 ~encoding ~env req0)
-        else None
-    | Json as encoding ->
-        let c = content_type req0 in
-        let type_match = Result.map is_application_json c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)

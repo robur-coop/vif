@@ -284,8 +284,6 @@ module Uri : sig
       exception. *)
 end
 
-module Json = Vif_core.Json
-
 module Headers : sig
   type t = (string * string) list
 
@@ -480,7 +478,6 @@ module Type : sig
   (** Type to describe the body of requests. *)
 
   val null : (null, unit) t
-  val json : (json, Json.t) t
 
   val json_encoding : 'a Jsont.t -> (json, 'a) t
   (** [json_encoding t] is an [application/json] request whose content is a JSON
@@ -526,7 +523,7 @@ module Request : sig
   val accept : ('c, 'a) t -> string list
   (** [accept req] returns what the client can accept and understand. *)
 
-  val of_json : (Type.json, 'a) t -> ('a, [ `Msg of string ]) result
+  val of_json : (Type.json, 'a) t -> ('a, [> `Msg of string ]) result
 
   val of_multipart_form :
        (Type.multipart_form, 'a) t
