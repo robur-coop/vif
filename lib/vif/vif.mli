@@ -982,11 +982,14 @@ module Response : sig
 
   val redirect_to :
        ?with_get:bool
+    -> ?status:Status.redirection
     -> ('c, 'a) Request.t
     -> (Tyre.evaluable, 'r, (filled, sent, unit) t) Uri.t
     -> 'r
-  (** [redirect_to ?with_get req uri] responds a redirection to [uri] to the
-      client. *)
+  (** [redirect_to ?with_get ?status req uri] responds a redirection to [uri] to
+      the client. If the user does not provide ?status (defaults), Vif proposes
+      a temporary redirections. Otherwise, we took the redirection status that
+      the user wants. *)
 
   (** Headers manipulation. *)
 

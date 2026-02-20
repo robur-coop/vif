@@ -317,6 +317,7 @@ module Response : sig
 
   val redirect_to :
        ?with_get:bool
+    -> ?status:Status.redirection
     -> ('c, 'a) Request.t
     -> (Tyre.evaluable, 'r, (filled, sent, unit) t) Uri.t
     -> 'r

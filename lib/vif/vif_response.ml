@@ -38,13 +38,14 @@ let rem ~field = Rem_header field
 let ( let* ) = bind
 let strf fmt = Format.asprintf fmt
 
-let redirect_to ?(with_get = true) req uri =
+let redirect_to ?(with_get = true) ?status req uri =
   let fn rel =
     let* _ = add_unless_exists ~field:"location" rel in
-    match (Vif_request.meth req, with_get) with
-    | `GET, true (* GET-to-GET *) -> Respond `Found
-    | _, true (* XXX-to-GET *) -> Respond `See_other
-    | _, false (* XXX-to-XXX *) -> Respond `Temporary_redirect
+    match (status, Vif_request.meth req, with_get) with
+    | Some (#Vif_status.redirection as status), _, _ -> Respond status
+    | _, `GET, true (* GET-to-GET *) -> Respond `Found
+    | _, _, true (* XXX-to-GET *) -> Respond `See_other
+    | _, _, false (* XXX-to-XXX *) -> Respond `Temporary_redirect
   in
   Vif_uri.keval ~slash:true uri fn
 
