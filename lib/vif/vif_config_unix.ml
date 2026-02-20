@@ -12,6 +12,7 @@ type config = {
   ; domains: int
   ; reporter: Logs.reporter option
   ; level: Logs.level option option
+  ; with_rng: bool
 }
 
 let really_bad_secret =
@@ -25,9 +26,8 @@ let default_domains = Int.min (Stdlib.Domain.recommended_domain_count ()) 4
 let alpn_protocols_error required_protocol advised_protocols =
   Fmt.failwith
     "The given TLS configuration does not accept %s connections, you must \
-     specify the [alpn_protocols] field in the TLS configuration with \
-     %s."
-     required_protocol advised_protocols
+     specify the [alpn_protocols] field in the TLS configuration with %s."
+    required_protocol advised_protocols
 
 let lint_tls_config http tls =
   let { Tls.Config.alpn_protocols; _ } = Tls.Config.of_server tls in
@@ -36,15 +36,17 @@ let lint_tls_config http tls =
       if not (List.mem "http/1.1" alpn_protocols) then
         alpn_protocols_error "http/1.1" "[\"http/1.1\"]"
   | Some (`H2 _) ->
-      if not (List.mem "h2" alpn_protocols) then alpn_protocols_error "h2" "[\"h2\"]"
+      if not (List.mem "h2" alpn_protocols) then
+        alpn_protocols_error "h2" "[\"h2\"]"
   | Some (`Both (_, _)) ->
       if
         (not (List.mem "http/1.1" alpn_protocols))
         || not (List.mem "h2" alpn_protocols)
       then alpn_protocols_error "http/1.1 or h2" "[\"http/1.1\"] and [\"h2\"]"
 
-let config ?(domains = default_domains) ?(cookie_key = really_bad_secret) ?pid
-    ?reporter ?level ?http ?tls ?(backlog = 64) sockaddr =
+let config ?(with_rng = true) ?(domains = default_domains)
+    ?(cookie_key = really_bad_secret) ?pid ?reporter ?level ?http ?tls
+    ?(backlog = 64) sockaddr =
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
@@ -53,4 +55,15 @@ let config ?(domains = default_domains) ?(cookie_key = really_bad_secret) ?pid
     | None -> None
   in
   let () = Option.iter (lint_tls_config http) tls in
-  { http; tls; backlog; sockaddr; pid; cookie_key; domains; reporter; level }
+  {
+    http
+  ; tls
+  ; backlog
+  ; sockaddr
+  ; pid
+  ; cookie_key
+  ; domains
+  ; reporter
+  ; level
+  ; with_rng
+  }
