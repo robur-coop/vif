@@ -378,11 +378,8 @@ let default_from_handlers handlers req target server user's_value =
 let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
     ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
     user's_value =
-  let rng = Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna)) in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
-  let finally () = Mirage_crypto_rng_miou_unix.kill rng in
-  Fun.protect ~finally @@ fun () ->
   let interactive = !Sys.interactive in
   let domains = Int.min (Miou.Domain.available ()) cfg.domains in
   let stop =
@@ -399,6 +396,16 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
     | false -> None
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
+  let devices =
+    if cfg.Vif_config_unix.with_rng then
+      let rng =
+        let finally = Mirage_crypto_rng_miou_unix.kill in
+        Device.v ~name:"mirage-crypto" ~finally Device.[] @@ fun _ ->
+        Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna))
+      in
+      Devices.(rng :: devices)
+    else devices
+  in
   let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
   let server =

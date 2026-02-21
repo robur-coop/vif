@@ -1106,7 +1106,8 @@ end
 type config
 
 val config :
-     ?domains:int
+     ?with_rng:bool
+  -> ?domains:int
   -> ?cookie_key:Mirage_crypto.AES.GCM.key
   -> ?pid:Fpath.t
   -> ?reporter:Logs.reporter

@@ -24,6 +24,7 @@
  (libraries
   multipart_form
   multipart_form-miou
+  mirage-crypto-rng-miou-unix
   uri
   flux
   fluxt.gz
