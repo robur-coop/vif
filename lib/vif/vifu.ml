@@ -16,7 +16,7 @@ module Multipart_form = Vif_core.Multipart_form
 module Handler = struct
   include Vif_core.Handler
 
-  type nonrec ('c, 'value) t = (Mhttp.flow, 'c, 'value) t
+  type nonrec ('c, 'value) t = (Mhttp_server.flow, 'c, 'value) t
 end
 
 module Response = struct
@@ -38,13 +38,14 @@ end
 module Route = struct
   include Vif_core.Route
 
-  type nonrec 'r t = (Mhttp.flow, 'r) t
+  type nonrec 'r t = (Mhttp_server.flow, 'r) t
 
   open Vif_core.Type
 
   type ('fu, 'return) route =
     | Handler :
-        (Mhttp.flow, 'f, 'x) Vif_core.Route.req * ('e, 'x, 'r) Vif_core.Uri.t
+        (Mhttp_server.flow, 'f, 'x) Vif_core.Route.req
+        * ('e, 'x, 'r) Vif_core.Uri.t
         -> ('f, 'r) route
 
   let get t = Handler (Request (Some `GET, Null), t)
@@ -59,21 +60,23 @@ end
 module Middleware = struct
   include Vif_core.Middleware
 
-  type nonrec ('cfg, 'v) t = (Mhttp.flow, 'cfg, 'v) t
+  type nonrec ('cfg, 'v) t = (Mhttp_server.flow, 'cfg, 'v) t
 end
 
 module Middlewares = struct
   type 'cfg t =
     | [] : 'cfg t
-    | ( :: ) : (Mhttp.flow, 'cfg, 'a) Vif_core.Middleware.t * 'cfg t -> 'cfg t
+    | ( :: ) :
+        (Mhttp_server.flow, 'cfg, 'a) Vif_core.Middleware.t * 'cfg t
+        -> 'cfg t
 
-  type ('cfg, 'v) fn = (Mhttp.flow, 'cfg, 'v) Vif_core.Middleware.fn
+  type ('cfg, 'v) fn = (Mhttp_server.flow, 'cfg, 'v) Vif_core.Middleware.fn
 
   let v = Vif_core.Middleware.v
 
   type ('value, 'a, 'c) ctx = {
       server: Vif_core.Server.t
-    ; request: Mhttp.flow Vif_core.Request0.t
+    ; request: Mhttp_server.flow Vif_core.Request0.t
     ; target: string
     ; user's_value: 'value
   }
@@ -97,8 +100,8 @@ end
 module Request = struct
   include Vif_core.Request
 
-  type nonrec ('c, 'a) t = (Mhttp.flow, 'c, 'a) t
-  type nonrec request = Mhttp.flow request
+  type nonrec ('c, 'a) t = (Mhttp_server.flow, 'c, 'a) t
+  type nonrec request = Mhttp_server.flow request
 end
 
 module Config = struct
@@ -141,7 +144,7 @@ type 'value daemon = {
 
 and 'value user's_function =
   | User's_request :
-      Mhttp.flow Vif_core.Request0.t * 'value fn
+      Mhttp_server.flow Vif_core.Request0.t * 'value fn
       -> 'value user's_function
 
 and 'value fn =
@@ -212,7 +215,7 @@ let to_mnet_flow (`Tcp flow) = flow
 
 let peer socket =
   let flow = to_mnet_flow socket in
-  let _, (ipaddr, port) = Mnet.TCPv4.peers flow in
+  let _, (ipaddr, port) = Mnet.TCP.peers flow in
   Fmt.str "http://%a:%d" Ipaddr.pp ipaddr port
 
 let handler ~default ~middlewares routes daemon =
@@ -275,11 +278,11 @@ let process cfg server tcpv4 user's_value ready fn =
       assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      Mhttp.clear ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
+      Mhttp_server.clear ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
   | None, None ->
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Mhttp.clear ~ready ~handler:fn ~port:cfg.port tcpv4;
+      Mhttp_server.clear ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
 
 let default req target _server _user's_value =

@@ -67,4 +67,4 @@
  (name vifu)
  (public_name vifu)
  (modules vifu)
- (libraries vif.core mhttp))
+ (libraries vif.core mhttp-server))
