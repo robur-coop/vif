@@ -358,6 +358,11 @@ type 'socket request = {
 let prepare_uri uri =
   uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
 
+let prepare_target target =
+  match String.index_opt target '?' with
+  | None -> target
+  | Some _ -> prepare_uri (Uri.of_string target)
+
 let rec find_and_trigger : type s r.
     original:string -> s request -> Re.Group.t -> (s, r) re_ex list -> r =
  fun ~original e subs -> function
@@ -375,14 +380,17 @@ let rec find_and_trigger : type s r.
       else find_and_trigger ~original e subs l
 
 let match_ (methods, jokers) meth s =
-  let ( let+ ) x f = Option.map f x in
   match Vif_method.Map.find_opt meth methods with
-  | Some (re, wl) ->
-      let+ subs = Re.exec_opt re s in
-      (subs, wl)
-  | None ->
-      let+ subs = Re.exec_opt (fst jokers) s in
-      (subs, snd jokers)
+  | Some (re, wl) -> begin
+      match Re.exec_opt re s with
+      | None -> None
+      | Some subs -> Some (subs, wl)
+    end
+  | None -> begin
+      match Re.exec_opt (fst jokers) s with
+      | None -> None
+      | Some subs -> Some (subs, snd jokers)
+    end
 
 let dispatch : type s r c.
        default:((s, c, string) Vif_request.t -> string -> r)
@@ -394,7 +402,7 @@ let dispatch : type s r c.
  fun ~default l ->
   let info = build_info l in
   fun ~meth ~request:e ~target ->
-    let s = prepare_uri (Uri.of_string target) in
+    let s = prepare_target target in
     match match_ info meth s with
     | None -> default (Option.get (e.extract None Any)) s
     | Some (subs, wl) -> (

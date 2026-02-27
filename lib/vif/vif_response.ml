@@ -9,6 +9,7 @@ and sent = Sent
 type 'a state =
   | Empty : empty state
   | Filled : string Flux.stream -> filled state
+  | Filled_string : string -> filled state
   | Sent : sent state
 
 let _empty = Empty
@@ -107,15 +108,23 @@ let connection_close req =
   | 1 -> add_unless_exists ~field:"connection" "close"
   | _ -> return false
 
+let small_int_strings =
+  Array.init 256 string_of_int
+
+let fast_string_of_int n =
+  if n >= 0 && n < 256 then small_int_strings.(n)
+  else string_of_int n
+
 let content_length len =
-  add_unless_exists ~field:"content-length" (string_of_int len)
+  add_unless_exists ~field:"content-length" (fast_string_of_int len)
 
 let with_string ?compression:alg req str =
   let* _ = content_length (String.length str) in
-  let* _ = connection_close req in
-  let none = return false in
-  let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
-  String str
+  match alg with
+  | None -> String str
+  | Some alg ->
+      let* _ = compression alg req in
+      String str
 
 let with_text ?(utf_8 = true) ?compression req str =
   let field = "content-type" in
@@ -173,6 +182,22 @@ let empty =
   String ""
 
 let websocket = Websocket
+
+let respond_string ?headers:(hdrs = []) status req0 str =
+  match Vif_request0.reqd req0 with
+  | `V1 reqd ->
+      let hdrs = H1.Headers.of_list hdrs in
+      let status =
+        match status with
+        | #H1.Status.t as status -> status
+        | _ -> invalid_arg "respond_string: invalid status"
+      in
+      let resp = H1.Response.create ~headers:hdrs status in
+      H1.Reqd.respond_with_string reqd resp str
+  | `V2 reqd ->
+      let hdrs = H2.Headers.of_list hdrs in
+      let resp = H2.Response.create ~headers:hdrs status in
+      H2.Reqd.respond_with_string reqd resp str
 
 let response ?headers:(hdrs = []) status req0 =
   let tags = Vif_request0.tags req0 in
@@ -236,7 +261,6 @@ let run : type a p q.
     -> q state * a =
  fun ~now req s t ->
   let headers = ref [] in
-  let tags = Vif_request0.tags req in
   let rec go : type a p q. p state -> (p, q, a) t -> q state * a =
    fun s t ->
     match (s, t) with
@@ -263,9 +287,7 @@ let run : type a p q.
     | Empty, Source from -> (Filled (Flux.Stream.from from), ())
     | Empty, Stream stream -> (Filled stream, ())
     | Empty, String str ->
-        if Vif_request0.version req = 1 then
-          headers := Vif_headers.add_unless_exists !headers "connection" "close";
-        (Filled (Flux.Source.list [ str ] |> Flux.Stream.from), ())
+        (Filled_string str, ())
     | Empty, Websocket -> begin
         match get_nonce req with
         | None -> assert false (* TODO *)
@@ -273,6 +295,20 @@ let run : type a p q.
             let hdrs1 = H1.Websocket.Handshake.server_headers ~sha1 ~nonce in
             let headers = H1.Headers.to_list hdrs1 in
             upgrade ~headers req; (Sent, ())
+      end
+    | Filled_string str, Respond status -> begin
+        let headers = !headers in
+        match Vif_headers.get headers "content-encoding" with
+        | None | Some "" ->
+            Log.debug (fun m ->
+                let tags = Vif_request0.tags req in
+                m ~tags "new response (fast path) with: @[<hov>%a@]"
+                  Vif_headers.pp headers);
+            respond_string ~headers status req str;
+            (Sent, ())
+        | _ ->
+            let stream = Flux.Source.list [ str ] |> Flux.Stream.from in
+            go (Filled stream) (Respond status)
       end
     | Filled stream, Respond status ->
         let headers = !headers in
@@ -302,9 +338,12 @@ let run : type a p q.
           | _ -> (headers, Flux.Flow.identity)
         in
         Log.debug (fun m ->
+            let tags = Vif_request0.tags req in
             m ~tags "new response with: @[<hov>%a@]" Vif_headers.pp headers);
         let into = response ~headers status req in
-        Log.debug (fun m -> m ~tags "run our stream to send a response");
+        Log.debug (fun m ->
+            let tags = Vif_request0.tags req in
+            m ~tags "run our stream to send a response");
         let stream = Flux.Stream.via via stream in
         Flux.Stream.into into stream;
         (Sent, ())

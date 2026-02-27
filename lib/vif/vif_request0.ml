@@ -7,10 +7,10 @@ type 'socket t = {
   ; tls: Tls.Core.epoch_data option
   ; reqd: reqd
   ; socket: 'socket
-  ; on_localhost: bool
+  ; on_localhost: bool Lazy.t
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
-  ; queries: (string * string list) list
-  ; tags: Logs.Tag.set
+  ; queries: (string * string list) list Lazy.t
+  ; tags: Logs.Tag.set Lazy.t
 }
 
 and reqd = Httpcats_core.Server.reqd
@@ -47,7 +47,7 @@ let accept { request; _ } =
       let types = List.sort (fun (_, a) (_, b) -> Float.compare b a) types in
       List.map fst types
 
-let tags { tags; _ } = tags
+let tags { tags; _ } = Lazy.force tags
 
 let to_source ~src ~schedule ~close body =
   Flux.Source.with_task ~size:0x7ff @@ fun bqueue ->
@@ -87,12 +87,12 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
     | V2 req -> req.H2.Request.target
   in
   let tls = with_tls socket in
-  let on_localhost = is_localhost socket in
-  let tags = Logs.Tag.empty in
-  let tags =
+  let on_localhost = lazy (is_localhost socket) in
+  let tags = lazy begin
+    let tags = Logs.Tag.empty in
     Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags
-  in
-  let queries = Pct.query_of_target target in
+  end in
+  let queries = lazy (Pct.query_of_target target) in
   { request; tls; reqd; socket; on_localhost; body; queries; tags }
 
 let headers { request; _ } =
@@ -100,7 +100,7 @@ let headers { request; _ } =
   | V1 req -> H1.Headers.to_list req.H1.Request.headers
   | V2 req -> H2.Headers.to_list req.H2.Request.headers
 
-let queries { queries; _ } = queries
+let queries { queries; _ } = Lazy.force queries
 
 let meth { request; _ } =
   match request with
@@ -124,15 +124,19 @@ let report_exn { reqd; _ } exn =
 
 let version { request; _ } = match request with V1 _ -> 1 | V2 _ -> 2
 let tls { tls; _ } = tls
-let on_localhost { on_localhost; _ } = on_localhost
+let on_localhost { on_localhost; _ } = Lazy.force on_localhost
 let reqd { reqd; _ } = reqd
 
 let source { reqd; tags; _ } =
-  Log.debug (fun m -> m ~tags "the user request for a source of the request");
+  Log.debug (fun m ->
+      let tags = Lazy.force tags in
+      m ~tags "the user request for a source of the request");
   to_source ~src reqd
 
 let close { body; tags; _ } =
-  Log.debug (fun m -> m ~tags "close the reader body");
+  Log.debug (fun m ->
+      let tags = Lazy.force tags in
+      m ~tags "close the reader body");
   match body with
   | `V1 body -> H1.Body.Reader.close body
   | `V2 body -> H2.Body.Reader.close body
