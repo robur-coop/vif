@@ -174,42 +174,47 @@ let rec clean_up orphans =
           clean_up orphans
     end
 
+let now () = Int32.of_int (Mkernel.clock_wall ())
+
+let dispatch_task daemon = function
+  | User's_request (req0, fn) ->
+      Log.debug (fun m -> m "start to execute a request handler");
+      let fn () =
+        try
+          let Vif_core.Response.Sent, () =
+            Vif_core.Response.(run ~now req0 Empty)
+              (fn daemon.server daemon.user's_value)
+          in
+          Vif_core.Request0.close req0
+        with exn ->
+          let bt = Printexc.get_raw_backtrace () in
+          Log.err (fun m ->
+              m "Unexpected exception from the user's handler: %s"
+                (Printexc.to_string exn));
+          Log.err (fun m ->
+              m "%s" (Printexc.raw_backtrace_to_string bt));
+          Vif_core.Request0.report_exn req0 exn
+      in
+      ignore (Miou.async ~orphans:daemon.orphans fn)
+
+let drain_queue queue =
+  let rec go acc =
+    if Queue.is_empty queue then acc
+    else go (Queue.pop queue :: acc)
+  in
+  go []
+
 let rec user's_functions daemon =
   clean_up daemon.orphans;
   let tasks =
-    Miou.Mutex.protect daemon.mutex @@ fun () ->
-    while Queue.is_empty daemon.queue do
-      Miou.Condition.wait daemon.condition daemon.mutex
-    done;
-    let lst = List.of_seq (Queue.to_seq daemon.queue) in
-    Queue.clear daemon.queue; lst
+    Miou.Mutex.protect daemon.mutex (fun () ->
+      while Queue.is_empty daemon.queue do
+        Miou.Condition.wait daemon.condition daemon.mutex
+      done;
+      drain_queue daemon.queue)
   in
-  let fn = function
-    | User's_request (req0, fn) ->
-        let tags = Vif_core.Request0.tags req0 in
-        Log.debug (fun m -> m ~tags "new user's request handler");
-        let now () = Int32.of_int (Mkernel.clock_wall ()) in
-        let fn () =
-          try
-            Log.debug (fun m -> m ~tags "run user's request handler");
-            let Vif_core.Response.Sent, () =
-              Vif_core.Response.(run ~now req0 Empty)
-                (fn daemon.server daemon.user's_value)
-            in
-            Log.debug (fun m -> m ~tags "user's request handler terminated");
-            Vif_core.Request0.close req0
-          with exn ->
-            let bt = Printexc.get_raw_backtrace () in
-            Log.err (fun m ->
-                m ~tags "Unexpected exception from the user's handler: %s"
-                  (Printexc.to_string exn));
-            Log.err (fun m ->
-                m ~tags "%s" (Printexc.raw_backtrace_to_string bt));
-            Vif_core.Request0.report_exn req0 exn
-        in
-        ignore (Miou.async ~orphans:daemon.orphans fn)
-  in
-  List.iter fn tasks; user's_functions daemon
+  List.iter (dispatch_task daemon) tasks;
+  user's_functions daemon
 
 let to_mnet_flow (`Tcp flow) = flow
 
@@ -221,25 +226,38 @@ let peer socket =
 let handler ~default ~middlewares routes daemon =
   ();
   let dispatch = Route.dispatch ~default routes in
+  let has_middlewares = match middlewares with Middlewares.[] -> false | _ -> true in
   fun socket reqd ->
     let req0 = Vif_core.Request0.of_reqd ~peer socket reqd in
-    let ctx = to_ctx daemon req0 in
-    let env = Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty in
+    let env =
+      if has_middlewares then begin
+        let ctx = to_ctx daemon req0 in
+        Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty
+      end else
+        Vif_core.Middleware.Hmap.empty
+    in
     let request = Vif_core.recognize_request ~env req0 in
     let target = Vif_core.Request0.target req0 in
     let meth = Vif_core.Request0.meth req0 in
     try
       let fn = dispatch ~meth ~request ~target in
-      (* NOTE(dinosaure): the management of the http request must finish and above
-         all **not** block. Otherwise, the entire domain is blocked. Thus, the
-         management of a new request transfers the user task (which can block) to
-         our "daemon" instantiated in our current domain which runs cooperatively.
-      *)
-      begin
-        Miou.Mutex.protect daemon.mutex @@ fun () ->
-        Queue.push (User's_request (req0, fn)) daemon.queue;
-        Miou.Condition.signal daemon.condition
-      end
+      match meth with
+      | `GET | `HEAD | `DELETE ->
+          begin try
+            let Vif_core.Response.Sent, () =
+              Vif_core.Response.(run ~now req0 Empty)
+                (fn daemon.server daemon.user's_value)
+            in
+            Vif_core.Request0.close req0
+          with exn ->
+            Vif_core.Request0.report_exn req0 exn
+          end
+      | _ ->
+          begin
+            Miou.Mutex.protect daemon.mutex @@ fun () ->
+            Queue.push (User's_request (req0, fn)) daemon.queue;
+            Miou.Condition.signal daemon.condition
+          end
     with exn ->
       let bt = Printexc.get_raw_backtrace () in
       Log.err (fun m ->
