@@ -26,12 +26,10 @@
   transfer-encoding: chunked
   content-type: text/plain; charset=utf-8
   content-encoding: deflate
-  connection: close
   $ hurl http://localhost:$PORT/gzip Accept-Encoding:gzip -p=h
   transfer-encoding: chunked
   content-type: text/plain; charset=utf-8
   content-encoding: gzip
-  connection: close
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/10-route/main.ml -p $PORT &
   $ ./waitfile.exe vif.pid
