@@ -2,6 +2,8 @@ let src = Logs.Src.create "vif.request"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
+
 type ('socket, 'c, 'a) t = {
     body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
   ; encoding: ('c, 'a) Vif_type.t
@@ -54,6 +56,10 @@ let of_json : type a.
       let from = source req in
       let reader = to_reader from in
       match Jsont_bytesrw.decode encoding reader with
+      | exception exn ->
+          Bytesrw.Bytes.Reader.discard reader;
+          error_msgf "Unexpected exception when decoding JSON: %s"
+            (Printexc.to_string exn)
       | Error msg ->
           Bytesrw.Bytes.Reader.discard reader;
           Error (`Msg msg)
