@@ -32,6 +32,12 @@ module Uri : sig
   val ( /?? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   val keval : ?slash:bool -> (Tyre.evaluable, 'f, 'r) t -> (string -> 'r) -> 'f
   val eval : ?slash:bool -> (Tyre.evaluable, 'f, string) t -> 'f
+  val execp : (_, _, _) t -> string -> bool
+  val extract :
+       ('e, 'f, 'r) t
+    -> string
+    -> 'f
+    -> ('r, [ `Converter_failure of exn | `No_match ]) result
 end
 
 module Headers : sig
