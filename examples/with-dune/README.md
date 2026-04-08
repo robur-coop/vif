@@ -5,7 +5,7 @@ user space with a chat room. The tutorial is available [here][tutorial]. The
 example uses `dune`, and the server can be launched with:
 
 ```shell
-$ opam install vif jwto caqti-miou caqti-driver-sqlite3 tyxml-ppx brr js_of_ocaml
+$ opam install vif jws caqti-miou caqti-driver-sqlite3 tyxml-ppx brr js_of_ocaml
 $ git clone https://github.com/robur-coop/vif
 $ cd vif
 $ dune build @example
