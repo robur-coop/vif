@@ -3,7 +3,7 @@ type credentials =
   ; password : string }
 
 type env =
-  { secret : string
+  { secret : Jws.Pk.t
   ; sw : Caqti_miou.Switch.t
   ; uri : Uri.t }
 
@@ -33,9 +33,10 @@ let jwt =
   | Error _err -> None
   | Ok token ->
       let ( let* ) = Option.bind in
-      let token = Jwto.decode_and_verify secret token in
+      let public = Jws.Pk.public secret in
+      let token = Jwt.decode ~public token in
       let* token = Result.to_option token in
-      let* username = List.assoc_opt "username" (Jwto.get_payload token) in
+      let* username = Jwt.value token ~key:"username" Jsont.string in
       Some { username }
 
 let caqti =
@@ -90,8 +91,8 @@ let login req server { secret; _ } =
   let open Vif.Response.Syntax in
   match Vif.Request.of_multipart_form req with
   | Ok (c : credentials) when login server c ->
-    let token = Jwto.encode HS512 secret [ "username", c.username ] in
-    let token = Result.get_ok token in
+    let cl = Jwt.Claims.(add "username" Jsont.string c.username empty) in
+    let token = Jwt.encode secret cl in
     let str = "Authenticated!\n" in
     let* () = Vif.Cookie.set ~name:"jwt" server req token in
     let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
@@ -241,10 +242,15 @@ let routes =
   ; post (m msg_form) (rel / "send" /?? nil) --> send ]
 
 let () = Miou_unix.run @@ fun () ->
+  Mirage_crypto_rng_unix.use_default ();
   Caqti_miou.Switch.run @@ fun sw ->
   let uri = Uri.make ~scheme:"sqlite3" ~path:"vif.db" () in
-  let env = { secret= "deadbeef"; sw; uri } in
+  let secret = X509.Private_key.generate `ED25519 in
+  let secret = Jws.Pk.of_private_key_exn secret in
+  let env = { secret; sw; uri } in
   let middlewares = Vif.Middlewares.[ jwt ] in
   let handlers = [ Vif.Handler.static ?top:None ] in
   let devices = Vif.Devices.[ caqti; chatroom ] in
-  Vif.run ~devices ~handlers ~middlewares ~websocket routes env
+  let sockaddr = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
+  let cfg = Vif.config ~with_rng:false sockaddr in
+  Vif.run ~cfg ~devices ~handlers ~middlewares ~websocket routes env

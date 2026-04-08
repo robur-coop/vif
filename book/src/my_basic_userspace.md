@@ -107,15 +107,15 @@ secure it. We will use Vif to create a new cookie, which will contain a JSON
 Web Token ([JWT][jwt]) that ensures the information is secure.
 
 The JWT requires a _secret_, a value that only the server knows in order to
-encrypt/decrypt the JWT. This is where we introduce three concepts:
-- Vif's ability to load an external library (we will use [jwto][jwto], an
+sign/unsign the JWT. This is where we introduce three concepts:
+- Vif's ability to load an external library (we will use [jwt][jws], an
   implementation of JWT in OCaml)
 - the ability to obtain configuration values (often found in the `.env` file of
   a website)
 - the creation of a new cookie if the user has logged in successfully
 
 ```ocaml
-#require "jwto" ;;
+#require "jws.jwt" ;;
 
 type env =
   { secret : string }
@@ -131,8 +131,8 @@ let login req server { secret } =
   let open Vif.Response.Syntax in
   match Vif.Request.of_json req with
   | Ok ({ username; _ } as v) when verify v ->
-    let token = Jwto.encode HS512 secret [ "username", username ] in
-    let token = Result.get_ok token in
+    let cl = Jwt.Claims.(add "username" Jsont.string username empty) in
+    let token = Jwt.encode secret cl in
     let* () = Vif.Cookie.set ~name:"my-token" server req token in
     let* () = Vif.Response.add ~field:"content-type" "text/plain; charset=utf-8" in
     let* () = Vif.Response.with_string req "Authenticated!\n" in
@@ -200,7 +200,7 @@ Authenticated!
 We are well connected! We can clearly see the cookie that the client should
 save. If we take a step back from the code, what we are doing here is managing
 a POST request containing identifiers, checking that they are correct, and
-creating a JWT using `jwto` if they are. In this token, we will simply store
+creating a JWT using `jwt` if they are. In this token, we will simply store
 the user's `username`. We then need to inform the client that we would like to
 save this token on their end. We do this using `Vif.Cookie.set` (there are a
 whole host of options, but I'll leave you to discover them in the
@@ -208,7 +208,7 @@ documentation).
 
 As a client, we can see the cookie (with `Set-Cookie`). It is encrypted...
 twice! Once by Vif itself (you can — and should — specify the encryption key
-with Vif.config) and once by `jwto`.
+with Vif.config) and once by `jwt`.
 
 We can now introduce a new concept in Vif: _middleware_.
 
@@ -245,9 +245,10 @@ let jwt =
   | Error _err -> None
   | Ok token ->
     let ( let* ) = Option.bind in
-    let token = Jwto.decode_and_verify secret token in
+    let public = Jws.Pk.public secret in
+    let token = Jwt.decode ~public token in
     let* token = Result.to_option token in
-    let* username = List.assoc_opt "username" (Jwto.get_payload token) in
+    let* username = Jwt.value token "username" Jsont.string in
     Some { username }
 ;;
 
@@ -274,7 +275,9 @@ let routes =
 ;;
 
 let () = Miou_unix.run @@ fun () ->
-  let env = { secret= "deadbeef" } in
+  let pk = X509.Private_key.generate ~seed:"deadbeef" `ED25519 in
+  let secret = Jws.Pk.of_private_key_exn pk in
+  let env = { secret } in
   let middlewares = Vif.Middlewares.[ jwt ] in
   Vif.run ~middlewares routes env ;;
 ```
@@ -292,7 +295,7 @@ logged in. All we need to do is display the username!
 Finally, we need to tell Vif that we want to apply this middleware.
 
 Note that the middleware also has access to our `env` and therefore also has
-access to our `secret` value (required for `jwto`). The user can also specify
+access to our `secret` value (required for `jwt`). The user can also specify
 the type of value that the middleware is capable of creating. In our case, we
 have defined the type `user` containing only the field `username`. We can of
 course extend this type with other values such as the user's ID, age, etc. In
@@ -335,4 +338,4 @@ This will allow us to introduce new concepts such as `ppx` and static files.
 
 [jsont]: https://github.com/dbuenzli/jsont
 [jwt]: https://en.wikipedia.org/wiki/JSON_Web_Token
-[jwto]: https://github.com/sporto/jwto
+[jws]: https://github.com/robur-coop/jws

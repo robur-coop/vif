@@ -1,12 +1,12 @@
 #require "vif" ;;
-#require "jwto" ;;
+#require "jws.jwt" ;;
 
 type user =
   { username : string }
 ;;
 
 type cfg =
-  { secret : string }
+  { secret : Jws.Pk.t }
 ;;
 
 let jwt = Vif.Middlewares.v ~name:"jwt" @@ fun req target server { secret } ->
@@ -14,8 +14,9 @@ let jwt = Vif.Middlewares.v ~name:"jwt" @@ fun req target server { secret } ->
   | Error err -> None
   | Ok token ->
       let ( let* ) = Option.bind in
-      let* token = Result.to_option (Jwto.decode_and_verify secret token) in
-      let* username = List.assoc_opt "username" (Jwto.get_payload token) in
+      let public = Jws.Pk.public secret in
+      let* token = Result.to_option (Jwt.decode ~public token) in
+      let* username = Jwt.value token ~key:"username" Jsont.string in
       Some { username }
 ;;
 
@@ -53,8 +54,8 @@ let login req server { secret } { username; password } =
   let open Vif.Response.Syntax in
   match List.assoc_opt username users with
   | Some p' when password = p' ->
-      let token = Jwto.encode HS512 secret [ "username", username ] in
-      let token = Result.get_ok token in
+      let cl = Jwt.Claims.(add "username" Jsont.string username empty) in
+      let token = Jwt.encode secret cl in
       let* () = Vif.Cookie.set ~name:"vif-token" server req token in
       let field = "content-type" in
       let* () = Vif.Response.add ~field "text/plain; charset=utf-8" in
@@ -114,6 +115,10 @@ let routes =
 ;;
 
 let () = Miou_unix.run @@ fun () ->
-  let secret = "deadbeef" in
-  Vif.run ~middlewares:Vif.Middlewares.[ jwt ] routes { secret }
+  Mirage_crypto_rng_unix.use_default ();
+  let pk = X509.Private_key.generate `ED25519 in
+  let pk = Jws.Pk.of_private_key_exn pk in
+  let sockaddr = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
+  let cfg = Vif.config ~with_rng:false sockaddr in
+  Vif.run ~cfg ~middlewares:Vif.Middlewares.[ jwt ] routes { secret= pk }
 ;;
