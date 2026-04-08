@@ -216,7 +216,9 @@ let rec user's_functions daemon =
   List.iter (dispatch_task daemon) tasks;
   user's_functions daemon
 
-let to_mnet_flow (`Tcp flow) = flow
+let to_mnet_flow = function
+  | `Tcp flow -> flow
+  | `Tls flow -> Mnet_tls.file_descr flow
 
 let peer socket =
   let flow = to_mnet_flow socket in
