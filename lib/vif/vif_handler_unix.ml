@@ -134,7 +134,7 @@ let static ?(top = pwd) =
             let src = file (Fpath.to_string abs_path) in
             let* _ = Response.content_length stat.Unix.st_size in
             let* () = match mime with
-              | Some mime -> Response.add ~field:"Content-Type" mime
+              | Some mime -> Response.add ~field:"content-type" mime
               | None -> Response.return () in
             let field = "etag" in
             let* () = Response.add ~field (sha256sum abs_path) in
