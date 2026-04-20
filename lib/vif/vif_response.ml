@@ -108,12 +108,10 @@ let connection_close req =
   | 1 -> add_unless_exists ~field:"connection" "close"
   | _ -> return false
 
-let small_int_strings =
-  Array.init 256 string_of_int
+let small_int_strings = Array.init 256 string_of_int
 
 let fast_string_of_int n =
-  if n >= 0 && n < 256 then small_int_strings.(n)
-  else string_of_int n
+  if n >= 0 && n < 256 then small_int_strings.(n) else string_of_int n
 
 let content_length len =
   add_unless_exists ~field:"content-length" (fast_string_of_int len)
@@ -268,13 +266,13 @@ let run : type a p q.
         let state, x = go state x in
         go state (fn x)
     | state, Return x -> (state, x)
-    | state, Add_unless_exists (k, v) -> begin
-        match Vif_headers.get !headers k with
+    | state, Add_unless_exists (k, v) ->
+        begin match Vif_headers.get !headers k with
         | Some _ -> (state, false)
         | None ->
             headers := (k, v) :: !headers;
             (state, true)
-      end
+        end
     | state, Add_header (k, v) ->
         headers := (k, v) :: !headers;
         (state, ())
@@ -286,16 +284,15 @@ let run : type a p q.
         (state, ())
     | Empty, Source from -> (Filled (Flux.Stream.from from), ())
     | Empty, Stream stream -> (Filled stream, ())
-    | Empty, String str ->
-        (Filled_string str, ())
-    | Empty, Websocket -> begin
-        match get_nonce req with
+    | Empty, String str -> (Filled_string str, ())
+    | Empty, Websocket ->
+        begin match get_nonce req with
         | None -> assert false (* TODO *)
         | Some nonce ->
             let hdrs1 = H1.Websocket.Handshake.server_headers ~sha1 ~nonce in
             let headers = H1.Headers.to_list hdrs1 in
             upgrade ~headers req; (Sent, ())
-      end
+        end
     | Filled_string str, Respond status -> begin
         let headers = !headers in
         match Vif_headers.get headers "content-encoding" with

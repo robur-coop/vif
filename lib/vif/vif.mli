@@ -185,24 +185,24 @@ module Uri : sig
       useful to create your own typed element:
 
       {[
-        type fruit = Apple | Orange | Banana
+      type fruit = Apple | Orange | Banana
 
-        let fruit =
-          let v =
-            Tyre.regex Re.(alt [ str "apple"; str "orange"; str "banana" ])
-          in
-          let inj = function
-            | "apple" -> Apple
-            | "orange" -> Orange
-            | "banana" -> Banana
-            | _ -> assert false
-          in
-          let prj = function
-            | Apple -> "apple"
-            | Orange -> "orange"
-            | Banana -> "banana"
-          in
-          Vif.Uri.conv inj prj v
+      let fruit =
+        let v =
+          Tyre.regex Re.(alt [ str "apple"; str "orange"; str "banana" ])
+        in
+        let inj = function
+          | "apple" -> Apple
+          | "orange" -> Orange
+          | "banana" -> Banana
+          | _ -> assert false
+        in
+        let prj = function
+          | Apple -> "apple"
+          | Orange -> "orange"
+          | Banana -> "banana"
+        in
+        Vif.Uri.conv inj prj v
       ]} *)
 
   type ('e, 'f, 'r) path
@@ -325,15 +325,12 @@ module Multipart_form : sig
       It is possible to describe this server-side form in this way:
 
       {[
-        type credential = { username: string; password: string }
+      type credential = { username: string; password: string }
 
-        let form =
-          let open Vif.Multipart_form in
-          let fn username password = { username; password } in
-          record fn
-          |+ field "username" string
-          |+ field "password" string
-          |> sealr
+      let form =
+        let open Vif.Multipart_form in
+        let fn username password = { username; password } in
+        record fn |+ field "username" string |+ field "password" string |> sealr
       ]}
 
       It is then possible to define a POST route to manage such a form:
@@ -431,24 +428,24 @@ module Multipart_form : sig
       of these parts in the form of a stream:
 
       {[
-        open Vif
+      open Vif
 
-        let upload req server _ =
-          let fn (part, src) =
-            match Multipart_form.name part with
-            | Some "file" -> S.Stream.to_file "foo.txt" (S.Stream.from src)
-            | Some "name" ->
-                let value = S.(Stream.into Sink.string (Stream.from src)) in
-                Hashtbl.add form "name" value
-            | _ -> S.Stream.(drain (from src))
-          in
-          let stream = Result.get_ok (Request.of_multipart_form req) in
-          S.Stream.each fn stream;
-          match Hashtbl.find_opt form "name" with
-          | Some value ->
-              Unix.rename "foo.txt" value;
-              Response.respond `OK
-          | _ -> Response.respond `Bad_request
+      let upload req server _ =
+        let fn (part, src) =
+          match Multipart_form.name part with
+          | Some "file" -> S.Stream.to_file "foo.txt" (S.Stream.from src)
+          | Some "name" ->
+              let value = S.(Stream.into Sink.string (Stream.from src)) in
+              Hashtbl.add form "name" value
+          | _ -> S.Stream.(drain (from src))
+        in
+        let stream = Result.get_ok (Request.of_multipart_form req) in
+        S.Stream.each fn stream;
+        match Hashtbl.find_opt form "name" with
+        | Some value ->
+            Unix.rename "foo.txt" value;
+            Response.respond `OK
+        | _ -> Response.respond `Bad_request
       ]}
 
       {b Note:} It is important to [drain] the parts that we are not familiar
@@ -639,20 +636,20 @@ module Client : sig
   (** {3:example-client Examples.}
 
       {[
-        (* https://raw.githubusercontent.com/<org>/<repository>/refs/heads/<branch>/README.md *)
-        let readme =
-          let open Vif.Uri in
-          host "raw.githubusercontent.com"
-          /% string `Path
-          /% string `Path
-          / "refs"
-          / "heads"
-          /% string `Path
-          / "README.md"
-          /?? nil
+      (* https://raw.githubusercontent.com/<org>/<repository>/refs/heads/<branch>/README.md *)
+      let readme =
+        let open Vif.Uri in
+        host "raw.githubusercontent.com"
+        /% string `Path
+        /% string `Path
+        / "refs"
+        / "heads"
+        /% string `Path
+        / "README.md"
+        /?? nil
 
-        let get_readme ?(branch = "main") ~org ~repository () =
-          Vif.Client.request ~meth:`GET readme org repository branch
+      let get_readme ?(branch = "main") ~org ~repository () =
+        Vif.Client.request ~meth:`GET readme org repository branch
       ]} *)
 end
 
@@ -674,25 +671,25 @@ module Device : sig
       {i device} (used to communicate with an SQL server):
 
       {[
-        type cfg = { sw: Caqti_miou.Switch.t; uri: Uri.t }
+      type cfg = { sw: Caqti_miou.Switch.t; uri: Uri.t }
 
-        let caqti =
-          let finally (module Conn : Caqti_miou.CONNECTION) =
-            Conn.disconnect ()
-          in
-          Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri } ->
-          match Caqti_miou_unix.connect ~sw uri with
-          | Ok conn -> conn
-          | Error err ->
-              Logs.err (fun m -> m "%a" Caqti_error.pp err);
-              Fmt.failwith "%a" Caqti_error.pp err
+      let caqti =
+        let finally (module Conn : Caqti_miou.CONNECTION) =
+          Conn.disconnect ()
+        in
+        Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri } ->
+        match Caqti_miou_unix.connect ~sw uri with
+        | Ok conn -> conn
+        | Error err ->
+            Logs.err (fun m -> m "%a" Caqti_error.pp err);
+            Fmt.failwith "%a" Caqti_error.pp err
 
-        let () =
-          Miou_unix.run @@ fun () ->
-          Caqti_miou.Switch.run @@ fun sw ->
-          let uri = Uri.of_string "sqlite3:foo.sqlite?create=false" in
-          let cfg = { sw; uri } in
-          Vif.run ~devices:Vif.Devices.[ caqti ] routes cfg
+      let () =
+        Miou_unix.run @@ fun () ->
+        Caqti_miou.Switch.run @@ fun sw ->
+        let uri = Uri.of_string "sqlite3:foo.sqlite?create=false" in
+        let cfg = { sw; uri } in
+        Vif.run ~devices:Vif.Devices.[ caqti ] routes cfg
       ]} *)
 
   type ('value, 'a) arg
@@ -773,30 +770,30 @@ module Middlewares : sig
       ["Authorization"] field:
 
       {[
-        let ( let* ) = Option.bind
+      let ( let* ) = Option.bind
 
-        let decode str =
-          match String.split_on_char ' ' str with
-          | [ "Basic"; b64 ] ->
-              let data = Base64.decode b64 in
-              let* data = Result.to_option data in
-              let data = String.split_on_char ':' data in
-              let username = List.hd data and password = List.tl data in
-              let password = String.concat ":" password in
-              Some (username password)
-          | _ -> None
+      let decode str =
+        match String.split_on_char ' ' str with
+        | [ "Basic"; b64 ] ->
+            let data = Base64.decode b64 in
+            let* data = Result.to_option data in
+            let data = String.split_on_char ':' data in
+            let username = List.hd data and password = List.tl data in
+            let password = String.concat ":" password in
+            Some (username password)
+        | _ -> None
 
-        let auth =
-          VIf.Middlewares.v ~name:"auth" @@ fun req _target _server _ ->
-          let hdrs = Vif.Request.headers_of_request req in
-          let* value = Vif.Headers.get hdrs "Authorization" in
-          let* username, password = decode value in
-          Some (username, password)
+      let auth =
+        VIf.Middlewares.v ~name:"auth" @@ fun req _target _server _ ->
+        let hdrs = Vif.Request.headers_of_request req in
+        let* value = Vif.Headers.get hdrs "Authorization" in
+        let* username, password = decode value in
+        Some (username, password)
 
-        let () =
-          Miou_unix.run @@ fun () ->
-          let middlewares = Vif.Middlewares.[ auth ] in
-          Vif.run ~middlewares routes ()
+      let () =
+        Miou_unix.run @@ fun () ->
+        let middlewares = Vif.Middlewares.[ auth ] in
+        Vif.run ~middlewares routes ()
       ]} *)
 
   type 'cfg t =
@@ -986,9 +983,9 @@ module Response : sig
     -> ('c, 'a) Request.t
     -> (Tyre.evaluable, 'r, (filled, sent, unit) t) Uri.t
     -> 'r
-  (** [redirect_to ?with_get ?status req uri] responds to the client with a 
-      redirection to [uri]. If the user does not provide ?status, Vif chooses
-     a temporary redirection status based on the [with_get] parameter. *)
+  (** [redirect_to ?with_get ?status req uri] responds to the client with a
+      redirection to [uri]. If the user does not provide ?status, Vif chooses a
+      temporary redirection status based on the [with_get] parameter. *)
 
   (** Headers manipulation. *)
 
@@ -1029,17 +1026,17 @@ module Cookie : sig
       automatically.
 
       {[
-        let hello req server _ =
-          let open Vif.Response.Syntax in
-          let value = Vif.Cookie.get ~name:"my-cookie" server req in
-          match value with
-          | "ping" ->
-              let* () = Vif.Cookie.set ~name:"my-cookie" server req "pong" in
-              Vif.Response.respond `OK
-          | "pong" ->
-              let* () = Vif.Cookie.set ~name:"my-cookie" server req "ping" in
-              Vif.Response.respond `OK
-          | _ -> Vif.Response.respond `OK
+      let hello req server _ =
+        let open Vif.Response.Syntax in
+        let value = Vif.Cookie.get ~name:"my-cookie" server req in
+        match value with
+        | "ping" ->
+            let* () = Vif.Cookie.set ~name:"my-cookie" server req "pong" in
+            Vif.Response.respond `OK
+        | "pong" ->
+            let* () = Vif.Cookie.set ~name:"my-cookie" server req "ping" in
+            Vif.Response.respond `OK
+        | _ -> Vif.Response.respond `OK
       ]} *)
 
   type config

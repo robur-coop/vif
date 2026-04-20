@@ -33,9 +33,9 @@ let rec run : type v.
  fun lst ctx env ->
   match lst with
   | [] -> env
-  | Middleware (fn, key) :: r -> begin
-      match fn ctx.req0 ctx.target ctx.server ctx.user's_value with
+  | Middleware (fn, key) :: r ->
+      begin match fn ctx.req0 ctx.target ctx.server ctx.user's_value with
       | Some value -> run r ctx (Hmap.add key value env)
       | None -> run r ctx env
       | exception _exn -> run r ctx env
-    end
+      end

@@ -119,11 +119,11 @@ module Phrase = struct
       | _ -> false
     in
     function
-    | { parsed= Ok toplevel_phrase; _ } -> begin
-        match top_directive_name toplevel_phrase with
+    | { parsed= Ok toplevel_phrase; _ } ->
+        begin match top_directive_name toplevel_phrase with
         | Some dir -> findlib_directive dir
         | None -> false
-      end
+        end
     | _ -> false
 end
 

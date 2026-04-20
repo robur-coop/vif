@@ -381,16 +381,16 @@ let rec find_and_trigger : type s r.
 
 let match_ (methods, jokers) meth s =
   match Vif_method.Map.find_opt meth methods with
-  | Some (re, wl) -> begin
-      match Re.exec_opt re s with
+  | Some (re, wl) ->
+      begin match Re.exec_opt re s with
       | None -> None
       | Some subs -> Some (subs, wl)
-    end
-  | None -> begin
-      match Re.exec_opt (fst jokers) s with
+      end
+  | None ->
+      begin match Re.exec_opt (fst jokers) s with
       | None -> None
       | Some subs -> Some (subs, snd jokers)
-    end
+      end
 
 let dispatch : type s r c.
        default:((s, c, string) Vif_request.t -> string -> r)

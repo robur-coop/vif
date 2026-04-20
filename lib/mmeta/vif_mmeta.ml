@@ -120,8 +120,8 @@ let compile ~predicates t ks =
               else go acc rest
         in
         go acc t
-    | k :: ks -> begin
-        match t with
+    | k :: ks ->
+        begin match t with
         | [] -> acc
         | Node { name= "package"; value; contents } :: rest ->
             let directory' =
@@ -132,7 +132,7 @@ let compile ~predicates t ks =
             if k = value then go ~directory:directory' acc contents ks
             else go ~directory acc rest (k :: ks)
         | _ :: rest -> go ~directory acc rest (k :: ks)
-      end
+        end
   in
   go ~directory:"" [] t ks
 
@@ -178,12 +178,12 @@ let string lexbuf =
 let rec predicates lexbuf acc =
   match Vif_mmeta_lexer.token lexbuf with
   | Rparen -> List.rev acc
-  | Name predicate -> begin
-      match Vif_mmeta_lexer.token lexbuf with
+  | Name predicate ->
+      begin match Vif_mmeta_lexer.token lexbuf with
       | Comma -> predicates lexbuf (Include predicate :: acc)
       | Rparen -> List.rev (Include predicate :: acc)
       | token -> invalid_token lexbuf token
-    end
+      end
   | Minus ->
       let predicate = name lexbuf in
       begin match Vif_mmeta_lexer.token lexbuf with
@@ -201,8 +201,8 @@ let rec parser lexbuf depth acc =
         "Closing parenthesis without matching opening one"
   | Eof when depth = 0 -> List.rev acc
   | Eof -> raise_parser_error lexbuf "%d closing parenthesis missing" depth
-  | Name name -> begin
-      match Vif_mmeta_lexer.token lexbuf with
+  | Name name ->
+      begin match Vif_mmeta_lexer.token lexbuf with
       | String value ->
           lparen lexbuf;
           let contents = parser lexbuf (succ depth) [] in
@@ -225,7 +225,7 @@ let rec parser lexbuf depth acc =
           | token -> invalid_token lexbuf token
           end
       | token -> invalid_token lexbuf token
-    end
+      end
   | token -> invalid_token lexbuf token
 
 let parser lexbuf =

@@ -159,15 +159,15 @@ module Multipart_form = struct
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
         until_await ~tags ctx push acc str
-    | exception Queue.Empty -> begin
-        match parse (`String str) with
+    | exception Queue.Empty ->
+        begin match parse (`String str) with
         | `Continue -> `Continue (ctx, acc)
         | `Done _tree -> `Stop acc
         | `Fail msg ->
             List.iter Bqueue.close actives;
             Log.err (fun m -> m ~tags "Invalid multipart/form-data: %s" msg);
             `Stop acc
-      end
+        end
 
   let rec until_done ~tags ({ queue; parse; actives } as ctx) push acc =
     match Queue.pop queue with
@@ -176,15 +176,15 @@ module Multipart_form = struct
         let acc = push acc (header, src) in
         let ctx = { ctx with actives= bqueue :: actives } in
         until_done ~tags ctx push acc
-    | exception Queue.Empty -> begin
-        match parse `Eof with
+    | exception Queue.Empty ->
+        begin match parse `Eof with
         | `Continue -> until_done ~tags ctx push acc
         | `Done _tree -> acc
         | `Fail msg ->
             List.iter Bqueue.close actives;
             Log.err (fun m -> m ~tags "Invalid multipart/form-data: %s" msg);
             acc
-      end
+        end
 
   let multipart_form req :
       (string, Multipart_form.Header.t * string source) flow =
