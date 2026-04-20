@@ -68,12 +68,12 @@ module Middlewares = struct
    fun lst ctx env ->
     match lst with
     | [] -> env
-    | Middleware (fn, key) :: r -> begin
-        match fn ctx.request ctx.target ctx.server ctx.user's_value with
+    | Middleware (fn, key) :: r ->
+        begin match fn ctx.request ctx.target ctx.server ctx.user's_value with
         | Some value -> run r ctx (Vif_core.Middleware.Hmap.add key value env)
         | None -> run r ctx env
         | exception _exn -> run r ctx env
-      end
+        end
 end
 
 module Response = struct
@@ -176,15 +176,15 @@ let rec clean_up orphans =
   match Miou.care orphans with
   | None -> ()
   | Some None -> ()
-  | Some (Some prm) -> begin
-      match Miou.await prm with
+  | Some (Some prm) ->
+      begin match Miou.await prm with
       | Ok () -> clean_up orphans
       | Error exn ->
           let bt = Printexc.get_raw_backtrace () in
           Log.err (fun m -> m "User's exception: %s" (Printexc.to_string exn));
           Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
           clean_up orphans
-    end
+      end
 
 let now () = Int32.of_float (Unix.gettimeofday ())
 
@@ -206,16 +206,14 @@ let dispatch_task daemon = function
           Log.err (fun m ->
               m "Unexpected exception from the user's handler: %s"
                 (Printexc.to_string exn));
-          Log.err (fun m ->
-              m "%s" (Printexc.raw_backtrace_to_string bt));
+          Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
           Vif_core.Request0.report_exn req0 exn
       in
       ignore (Miou.async ~orphans:daemon.orphans fn)
 
 let drain_queue queue =
   let rec go acc =
-    if Queue.is_empty queue then acc
-    else go (Queue.pop queue :: acc)
+    if Queue.is_empty queue then acc else go (Queue.pop queue :: acc)
   in
   go []
 
@@ -223,10 +221,10 @@ let rec user's_functions daemon =
   clean_up daemon.orphans;
   let tasks =
     Miou.Mutex.protect daemon.mutex (fun () ->
-      while Queue.is_empty daemon.queue do
-        Miou.Condition.wait daemon.condition daemon.mutex
-      done;
-      drain_queue daemon.queue)
+        while Queue.is_empty daemon.queue do
+          Miou.Condition.wait daemon.condition daemon.mutex
+        done;
+        drain_queue daemon.queue)
   in
   List.iter (dispatch_task daemon) tasks;
   user's_functions daemon
@@ -253,15 +251,17 @@ let is_localhost socket =
 let handler ~default ~middlewares routes daemon =
   ();
   let dispatch = Route.dispatch ~default routes in
-  let has_middlewares = match middlewares with Middlewares.[] -> false | _ -> true in
+  let has_middlewares =
+    match middlewares with Middlewares.[] -> false | _ -> true
+  in
   fun socket reqd ->
     let req0 = Vif_core.Request0.of_reqd socket ~is_localhost ~peer reqd in
     let env =
       if has_middlewares then begin
         let ctx = to_ctx daemon req0 in
         Middlewares.run middlewares ctx Vif_core.Middleware.Hmap.empty
-      end else
-        Vif_core.Middleware.Hmap.empty
+      end
+      else Vif_core.Middleware.Hmap.empty
     in
     let request = Vif_core.recognize_request ~env req0 in
     let target = Vif_core.Request0.target req0 in
@@ -280,8 +280,7 @@ let handler ~default ~middlewares routes daemon =
                 (fn daemon.server daemon.user's_value)
             in
             Vif_core.Request0.close req0
-          with exn ->
-            Vif_core.Request0.report_exn req0 exn
+          with exn -> Vif_core.Request0.report_exn req0 exn
           end
       | _ ->
           (* NOTE(dinosaure): For methods that may carry a request body (POST,

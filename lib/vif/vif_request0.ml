@@ -88,10 +88,12 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
   in
   let tls = with_tls socket in
   let on_localhost = lazy (is_localhost socket) in
-  let tags = lazy begin
-    let tags = Logs.Tag.empty in
-    Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags
-  end in
+  let tags =
+    lazy begin
+      let tags = Logs.Tag.empty in
+      Logs.Tag.add Vif_tags.client (Fmt.str "vif:%s" (peer socket)) tags
+    end
+  in
   let queries = lazy (Pct.query_of_target target) in
   { request; tls; reqd; socket; on_localhost; body; queries; tags }
 

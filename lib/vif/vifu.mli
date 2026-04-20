@@ -33,6 +33,7 @@ module Uri : sig
   val keval : ?slash:bool -> (Tyre.evaluable, 'f, 'r) t -> (string -> 'r) -> 'f
   val eval : ?slash:bool -> (Tyre.evaluable, 'f, string) t -> 'f
   val execp : (_, _, _) t -> string -> bool
+
   val extract :
        ('e, 'f, 'r) t
     -> string
