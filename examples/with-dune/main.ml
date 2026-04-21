@@ -21,7 +21,7 @@ let[@alert "-caqti_unstable"] user =
     let encode hash = Ok (Digestif.SHA256.to_hex hash) in
     let decode hex = Ok (Digestif.SHA256.of_hex hex) in
     custom ~encode ~decode string in
-  product (fun uid username password -> { uid; username; password })
+  product (fun uid username password -> Ok { uid; username; password })
   @@ proj int (fun (t : user) -> t.uid)
   @@ proj string (fun (t : user) -> t.username)
   @@ proj sha256 (fun (t : user) -> t.password)
