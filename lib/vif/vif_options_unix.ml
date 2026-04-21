@@ -1,32 +1,49 @@
+let default_addr = Unix.inet_addr_loopback
+let default_port = 8080
 let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-let port = ref 8080
-let inet_addr = ref Unix.inet_addr_loopback
+let port = ref default_port
+let inet_addr = ref default_addr
 let backlog = ref 64
 let pid = ref None
 let domains = ref None
 let reporter = ref None
 let level = ref None
+let unix_socket = ref None
 
-let setup_config domains' port' inet_addr' backlog' pid' reporter' level' =
+let setup_config domains' port' inet_addr' backlog' pid' reporter' level'
+    unix_socket' =
   port := port';
   inet_addr := inet_addr';
   backlog := backlog';
   pid := pid';
   domains := domains';
   reporter := reporter';
-  level := Some level'
+  level := Some level';
+  unix_socket := unix_socket'
 
 let config_from_globals () =
-  let sockaddr = Unix.(ADDR_INET (!inet_addr, !port)) in
-  Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
-    ?pid:!pid ~backlog:!backlog sockaddr
+  let inet_sockaddr = Unix.ADDR_INET (!inet_addr, !port) in
+  let is_default =
+    inet_sockaddr = Unix.ADDR_INET (default_addr, default_port)
+  in
+  let open Result.Syntax in
+  let* sockaddr =
+    match (is_default, !unix_socket) with
+    | true, Some path -> Ok (Unix.ADDR_UNIX path)
+    | true, None -> Ok inet_sockaddr
+    | false, None -> Ok inet_sockaddr
+    | false, Some _ -> Error "cannot mix internet and unix sockets"
+  in
+  Ok
+    (Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
+       ?pid:!pid ~backlog:!backlog sockaddr)
 
 open Cmdliner
 
 let port =
   let doc = "The port used by the HTTP server." in
   let open Arg in
-  value & opt int 8080 & info [ "p"; "port" ] ~doc ~docv:"PORT"
+  value & opt int default_port & info [ "p"; "port" ] ~doc ~docv:"PORT"
 
 let inet_addr =
   let doc = "The address to bind the HTTP server." in
@@ -38,8 +55,13 @@ let inet_addr =
   let inet_addr = Arg.conv (parser, pp) in
   let open Arg in
   value
-  & opt inet_addr Unix.inet_addr_loopback
+  & opt inet_addr default_addr
   & info [ "i"; "inet-addr" ] ~doc ~docv:"INET_ADDR"
+
+let unix_socket =
+  let doc = "The unix socket to bind the HTTP server." in
+  let open Arg in
+  value & opt (some string) None & info [ "U"; "unix-socket" ] ~doc ~docv:"PATH"
 
 let is_not_directory str =
   (Sys.file_exists str && Sys.is_directory str = false)
@@ -62,7 +84,7 @@ let pid =
   & info [ "pid-file" ] ~doc ~docv:"PATH"
 
 let domains =
-  let doc = "The number of number used by vif." in
+  let doc = "The number of domains used by vif." in
   let open Arg in
   value & opt (some int) None & info [ "domains" ] ~doc ~docv:"DOMAINS"
 
@@ -167,3 +189,4 @@ let setup_config =
   $ pid
   $ setup_reporter
   $ verbosity
+  $ unix_socket
