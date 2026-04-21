@@ -1129,6 +1129,7 @@ val run :
   -> ?middlewares:'value Middlewares.t
   -> ?handlers:('c, 'value) Handler.t list
   -> ?websocket:(ic -> oc -> Server.t -> 'value -> unit)
+  -> ?stop:Httpcats.Server.stop
   -> (Server.t -> 'value -> (Response.empty, Response.sent, unit) Response.t)
      Route.t
      list

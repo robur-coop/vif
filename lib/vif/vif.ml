@@ -402,15 +402,17 @@ let default_from_handlers handlers req target server user's_value =
   | None -> default req target server user's_value
 
 let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
-    ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket routes
+    ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket ?stop routes
     user's_value =
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
   let interactive = !Sys.interactive in
   let domains = Int.min (Miou.Domain.available ()) cfg.domains in
   let stop =
-    match interactive with
-    | true ->
+    match (interactive, stop) with
+    | _, Some _ -> stop (* if the caller provided a stop, always use it *)
+    | true, None ->
+        (* if we're interactive with no stop, stop on SIGINT *)
         let stop = Httpcats.Server.stop () in
         let fn _sigint =
           Log.debug (fun m -> m "Server shutdown request (SIGINT)");
@@ -419,7 +421,7 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
         let behavior = Sys.Signal_handle fn in
         ignore (Miou.sys_signal Sys.sigint behavior);
         Some stop
-    | false -> None
+    | false, None -> None (* otherwise there's nothing to be done *)
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let devices =

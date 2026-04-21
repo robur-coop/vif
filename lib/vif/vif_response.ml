@@ -143,8 +143,8 @@ let with_tyxml ?compression:alg req tyxml =
   let* _ = add_unless_exists ~field v in
   let* _ = connection_close req in
   let source =
-    Flux.Source.with_buffered_formatter ~size:0x7ff ~buffer_size:0x7ff @@ fun ppf ->
-    Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
+    Flux.Source.with_buffered_formatter ~size:0x7ff ~buffer_size:0x7ff
+    @@ fun ppf -> Fmt.pf ppf "%a" (Tyxml.Html.pp ()) tyxml
   in
   Source source
 
