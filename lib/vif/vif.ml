@@ -434,8 +434,12 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
         Some stop
     | false, None -> None (* otherwise there's nothing to be done *)
   in
-  let listen = match cfg.sockaddr with
-    | Unix.ADDR_UNIX _ as unix -> bind_unix_socket cfg.backlog unix
+  let listen =
+    match cfg.sockaddr with
+    | Unix.ADDR_UNIX path as unix ->
+        let delete () = try Unix.unlink path with _exn -> () in
+        let ret = bind_unix_socket cfg.backlog unix in
+        at_exit delete; ret
     | _ as inet -> Httpcats.Server.Bind inet
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
