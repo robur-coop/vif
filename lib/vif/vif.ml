@@ -317,7 +317,7 @@ type config = Vif_config_unix.config
 let () = Sys.set_signal Sys.sigpipe Sys.Signal_ignore
 let config = Vif_config_unix.config
 
-let process stop cfg server user's_value ready (fn, ws_fn) =
+let process stop cfg server user's_value ready listen (fn, ws_fn) =
   Logs.debug (fun m ->
       m "new HTTP server on [%d]" (Stdlib.Domain.self () :> int));
   let daemon =
@@ -341,7 +341,7 @@ let process stop cfg server user's_value ready (fn, ws_fn) =
   | config, Some tls ->
       let upgrade flow = ws_handler daemon ws_fn (`Tls flow) in
       Httpcats.Server.with_tls ~parallel ~upgrade ?stop ?config
-        ~backlog:cfg.backlog tls ~ready ~handler:fn cfg.sockaddr;
+        ~backlog:cfg.backlog tls ~ready ~handler:fn listen;
       Miou.cancel user's_tasks
   | Some (`H2 _), None ->
       Miou.cancel user's_tasks;
@@ -350,13 +350,12 @@ let process stop cfg server user's_value ready (fn, ws_fn) =
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
       let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
       Httpcats.Server.clear ~parallel ~upgrade ?stop ~config ~ready ~handler:fn
-        cfg.sockaddr;
+        listen;
       Miou.cancel user's_tasks
   | None, None ->
       let upgrade flow = ws_handler daemon ws_fn (`Tcp flow) in
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Httpcats.Server.clear ~parallel ~upgrade ?stop ~ready ~handler:fn
-        cfg.sockaddr;
+      Httpcats.Server.clear ~parallel ~upgrade ?stop ~ready ~handler:fn listen;
       Miou.cancel user's_tasks
 
 let store_pid = function
@@ -401,9 +400,21 @@ let default_from_handlers handlers req target server user's_value =
   | Some p -> p
   | None -> default req target server user's_value
 
-let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
-    ?(middlewares = Middlewares.[]) ?(handlers = []) ?websocket ?stop routes
-    user's_value =
+let bind_unix_socket backlog unix =
+  let fd = Miou_unix.unix_socket () in
+  Log.debug (fun m -> m "Binding UNIX socket early to pass it as fd");
+  Miou_unix.bind_and_listen ~backlog fd unix;
+  Httpcats.Server.Use (fd, unix)
+
+let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
+    ?(handlers = []) ?websocket ?stop routes user's_value =
+  let cfg =
+    match cfg with
+    | None -> Vif_options_unix.config_from_globals ()
+    | Some c -> Ok c
+  in
+  let open Result.Syntax in
+  let* cfg in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
   let interactive = !Sys.interactive in
@@ -422,6 +433,10 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
         ignore (Miou.sys_signal Sys.sigint behavior);
         Some stop
     | false, None -> None (* otherwise there's nothing to be done *)
+  in
+  let listen = match cfg.sockaddr with
+    | Unix.ADDR_UNIX _ as unix -> bind_unix_socket cfg.backlog unix
+    | _ as inet -> Httpcats.Server.Bind inet
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let devices =
@@ -450,7 +465,7 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
   let rd0 = Miou.Computation.create () in
   let prm0 =
     Miou.async @@ fun () ->
-    process stop cfg server user's_value rd0 (fn0, ws_fn0)
+    process stop cfg server user's_value rd0 listen (fn0, ws_fn0)
   in
   let tasks =
     let fn _ =
@@ -469,7 +484,7 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
   in
   let prmn =
     let fn (ready, fn, ws_fn) =
-      process stop cfg server user's_value ready (fn, ws_fn)
+      process stop cfg server user's_value ready listen (fn, ws_fn)
     in
     if domains > 0 then Miou.parallel fn tasks else []
   in
@@ -477,7 +492,8 @@ let run ?(cfg = Vif_options_unix.config_from_globals ()) ?(devices = Devices.[])
   Miou.await_exn prm1;
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
   Devices.finally (Vif_core.Device.Devices devices);
-  Log.debug (fun m -> m "Vif (and devices) terminated")
+  Log.debug (fun m -> m "Vif (and devices) terminated");
+  Ok ()
 
 let setup_config = Vif_options_unix.setup_config
 let reporter ~sources ~ppf = Vif_options_unix.reporter sources ppf

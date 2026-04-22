@@ -1134,7 +1134,7 @@ val run :
      Route.t
      list
   -> 'value
-  -> unit
+  -> (unit, string) result
 
 (**/*)
 
