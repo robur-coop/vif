@@ -413,7 +413,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     | None -> Vif_options_unix.config_from_globals ()
     | Some c -> Ok c
   in
-  let open Result.Syntax in
+  let ( let* ) = Result.bind in
   let* cfg in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;

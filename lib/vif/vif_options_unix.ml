@@ -26,7 +26,7 @@ let config_from_globals () =
   let is_default =
     inet_sockaddr = Unix.ADDR_INET (default_addr, default_port)
   in
-  let open Result.Syntax in
+  let ( let* ) = Result.bind in
   let* sockaddr =
     match (is_default, !unix_socket) with
     | true, Some path -> Ok (Unix.ADDR_UNIX path)
