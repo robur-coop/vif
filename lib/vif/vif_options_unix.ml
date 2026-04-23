@@ -1,8 +1,8 @@
 let default_addr = Unix.inet_addr_loopback
 let default_port = 8080
 let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-let port = ref default_port
-let inet_addr = ref default_addr
+let port = ref None
+let inet_addr = ref None
 let backlog = ref 64
 let pid = ref None
 let domains = ref None
@@ -22,17 +22,14 @@ let setup_config domains' port' inet_addr' backlog' pid' reporter' level'
   unix_socket := unix_socket'
 
 let config_from_globals () =
-  let inet_sockaddr = Unix.ADDR_INET (!inet_addr, !port) in
-  let is_default =
-    inet_sockaddr = Unix.ADDR_INET (default_addr, default_port)
-  in
   let ( let* ) = Result.bind in
   let* sockaddr =
-    match (is_default, !unix_socket) with
-    | true, Some path -> Ok (Unix.ADDR_UNIX path)
-    | true, None -> Ok inet_sockaddr
-    | false, None -> Ok inet_sockaddr
-    | false, Some _ -> Error "cannot mix internet and unix sockets"
+    match !inet_addr, !port, !unix_socket with
+    | _, _, None ->
+      Ok (Unix.ADDR_INET (Option.value !inet_addr ~default:default_addr,
+                          Option.value !port ~default:default_port))
+    | None, None, Some path -> Ok (Unix.ADDR_UNIX path)
+    | _ -> Error "cannot mix internet and unix sockets"
   in
   Ok
     (Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
@@ -43,7 +40,7 @@ open Cmdliner
 let port =
   let doc = "The port used by the HTTP server." in
   let open Arg in
-  value & opt int default_port & info [ "p"; "port" ] ~doc ~docv:"PORT"
+  value & opt (some int) None & info [ "p"; "port" ] ~doc ~docv:"PORT"
 
 let inet_addr =
   let doc = "The address to bind the HTTP server." in
@@ -55,7 +52,7 @@ let inet_addr =
   let inet_addr = Arg.conv (parser, pp) in
   let open Arg in
   value
-  & opt inet_addr default_addr
+  & opt (some inet_addr) None
   & info [ "i"; "inet-addr" ] ~doc ~docv:"INET_ADDR"
 
 let unix_socket =
