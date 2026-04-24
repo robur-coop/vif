@@ -412,8 +412,7 @@ let ancestors ~roots ?(predicates = [ "native"; "byte" ]) meta_path =
               (List.rev_append requires todo)
         | Error _ as err -> err)
   in
-  let open Rresult in
-  go [] [] [ meta_path ] >>| fun lst -> sort lst |> List.rev
+  Result.map (fun lst -> sort lst |> List.rev) (go [] [] [ meta_path ])
 
 let to_artifacts pkgs =
   let ( let* ) = Result.bind in
