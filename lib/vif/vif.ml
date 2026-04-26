@@ -404,7 +404,7 @@ let bind_unix_socket backlog unix =
   let fd = Miou_unix.unix_socket () in
   Log.debug (fun m -> m "Binding UNIX socket early to pass it as fd");
   Miou_unix.bind_and_listen ~backlog fd unix;
-  Httpcats.Server.Use (fd, unix)
+  fd
 
 let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ?(handlers = []) ?websocket ?stop routes user's_value =
@@ -430,13 +430,14 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
         Some stop
     | false, None -> None (* otherwise there's nothing to be done *)
   in
-  let listen =
+  let closer, listen =
     match cfg.sockaddr with
     | Unix.ADDR_UNIX path as unix ->
         let delete () = try Unix.unlink path with _exn -> () in
-        let ret = bind_unix_socket cfg.backlog unix in
-        at_exit delete; ret
-    | _ as inet -> Httpcats.Server.Bind inet
+        let fd = bind_unix_socket cfg.backlog unix in
+        at_exit delete;
+        (Some fd, Httpcats.Server.Use (fd, unix))
+    | _ as inet -> (None, Httpcats.Server.Bind inet)
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let devices =
@@ -491,6 +492,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   Miou.await_exn prm0;
   Miou.await_exn prm1;
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
+  Option.iter Miou_unix.close closer;
   Devices.finally (Vif_core.Device.Devices devices);
   Log.debug (fun m -> m "Vif (and devices) terminated")
 
