@@ -1,39 +1,22 @@
-let default_addr = Unix.inet_addr_loopback
-let default_port = 8080
 let error_msgf fmt = Fmt.kstr (fun msg -> Error (`Msg msg)) fmt
-let port = ref None
-let inet_addr = ref None
+let sockaddr = ref Unix.(ADDR_INET (inet_addr_loopback, 8080))
 let backlog = ref 64
 let pid = ref None
 let domains = ref None
 let reporter = ref None
 let level = ref None
-let unix_socket = ref None
 
-let setup_config domains' port' inet_addr' backlog' pid' reporter' level'
-    unix_socket' =
-  port := port';
-  inet_addr := inet_addr';
+let setup_config domains' sockaddr' backlog' pid' reporter' level' =
+  sockaddr := sockaddr';
   backlog := backlog';
   pid := pid';
   domains := domains';
   reporter := reporter';
-  level := Some level';
-  unix_socket := unix_socket'
+  level := Some level'
 
 let config_from_globals () =
-  let ( let* ) = Result.bind in
-  let* sockaddr =
-    match !inet_addr, !port, !unix_socket with
-    | _, _, None ->
-      Ok (Unix.ADDR_INET (Option.value !inet_addr ~default:default_addr,
-                          Option.value !port ~default:default_port))
-    | None, None, Some path -> Ok (Unix.ADDR_UNIX path)
-    | _ -> Error "cannot mix internet and unix sockets"
-  in
-  Ok
-    (Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
-       ?pid:!pid ~backlog:!backlog sockaddr)
+  Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
+    ?pid:!pid ~backlog:!backlog !sockaddr
 
 open Cmdliner
 
@@ -59,6 +42,21 @@ let unix_socket =
   let doc = "The unix socket to bind the HTTP server." in
   let open Arg in
   value & opt (some string) None & info [ "U"; "unix-socket" ] ~doc ~docv:"PATH"
+
+let setup_sockaddr inet_addr port unix_socket =
+  match inet_addr, port, unix_socket with
+  | None, None, None -> Ok Unix.(ADDR_INET (inet_addr_loopback, 8080))
+  | None, Some port, None -> Ok Unix.(ADDR_INET (inet_addr_loopback, port))
+  | Some inet_addr, None, None -> Ok Unix.(ADDR_INET (inet_addr, 8080))
+  | Some inet_addr, Some port, None -> Ok Unix.(ADDR_INET (inet_addr, port))
+  | None, _, Some unix_socket -> Ok Unix.(ADDR_UNIX unix_socket)
+  | Some _, _, Some _ -> error_msgf "Impossible to initialize a server on a UNIX socket and an address at the same time"
+
+let setup_sockaddr =
+  let open Term in
+  const setup_sockaddr
+  $ inet_addr $ port $ unix_socket
+  |> term_result ~usage:true
 
 let is_not_directory str =
   (Sys.file_exists str && Sys.is_directory str = false)
@@ -180,10 +178,8 @@ let setup_config =
   let open Term in
   const setup_config
   $ domains
-  $ port
-  $ inet_addr
+  $ setup_sockaddr
   $ backlog
   $ pid
   $ setup_reporter
   $ verbosity
-  $ unix_socket

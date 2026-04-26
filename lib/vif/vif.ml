@@ -408,13 +408,9 @@ let bind_unix_socket backlog unix =
 
 let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ?(handlers = []) ?websocket ?stop routes user's_value =
-  let cfg =
-    match cfg with
-    | None -> Vif_options_unix.config_from_globals ()
-    | Some c -> Ok c
-  in
-  let ( let* ) = Result.bind in
-  let* cfg in
+  let cfg = match cfg with
+    | Some cfg -> cfg
+    | None -> Vif_options_unix.config_from_globals () in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
   let interactive = !Sys.interactive in
@@ -496,8 +492,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   Miou.await_exn prm1;
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
   Devices.finally (Vif_core.Device.Devices devices);
-  Log.debug (fun m -> m "Vif (and devices) terminated");
-  Ok ()
+  Log.debug (fun m -> m "Vif (and devices) terminated")
 
 let setup_config = Vif_options_unix.setup_config
 let reporter ~sources ~ppf = Vif_options_unix.reporter sources ppf
