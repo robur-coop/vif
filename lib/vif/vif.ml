@@ -408,9 +408,11 @@ let bind_unix_socket backlog unix =
 
 let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ?(handlers = []) ?websocket ?stop routes user's_value =
-  let cfg = match cfg with
+  let cfg =
+    match cfg with
     | Some cfg -> cfg
-    | None -> Vif_options_unix.config_from_globals () in
+    | None -> Vif_options_unix.config_from_globals ()
+  in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
   let interactive = !Sys.interactive in
