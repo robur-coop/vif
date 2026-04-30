@@ -51,10 +51,9 @@ let sha256sum path =
 
 let mime_type path =
   match Conan_unix.run_with_tree Conan_light.tree (Fpath.to_string path) with
-  | Ok m ->
-      Option.value ~default:"application/octet-stream" (Conan.Metadata.mime m)
-  | Error _ -> "application/octet-stream"
-  | exception _ -> "application/octet-stream"
+  | Ok m -> Conan.Metadata.mime m
+  | Error _ -> None
+  | exception _ -> None
 
 let cached_on_client_side ?etag req target =
   let hdrs = Request.headers req in
@@ -123,17 +122,20 @@ let static ?(top = pwd) =
             let stat = Unix.stat (Fpath.to_string abs_path) in
             let mime =
               match cached_on_server_size stat abs_path cache with
-              | Some mime -> mime
+              | Some _ as value -> value
               | None ->
                   let mime = mime_type abs_path in
-                  let value = { V.mtime= stat.Unix.st_mtime; mime } in
-                  Cache.add abs_path value cache;
+                  let fn mime =
+                    let value = { V.mtime= stat.Unix.st_mtime; mime } in
+                    Cache.add abs_path value cache in
+                  Option.iter fn mime;
                   mime
             in
             let src = file (Fpath.to_string abs_path) in
             let* _ = Response.content_length stat.Unix.st_size in
-            let field = "content-type" in
-            let* () = Response.add ~field mime in
+            let* () = match mime with
+              | Some mime -> Response.add ~field:"content-type" mime
+              | None -> Response.return () in
             let field = "etag" in
             let* () = Response.add ~field (sha256sum abs_path) in
             let* () = Response.with_source req src in
