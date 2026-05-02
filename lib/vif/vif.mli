@@ -586,6 +586,11 @@ module Route : sig
   (** [head uri] describes a route which matches a [HEAD] request with the given
       path [uri]. A [HEAD] request does not have any contents. *)
 
+  val options :
+    ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
+  (** [options uri] describes a route which matches a [OPTIONS] request with the
+      given path [uri]. A [OPTIONS] request does not have any contents. *)
+
   val delete :
     ('e, 'x, 'r) Uri.t -> ((Type.null, unit) Request.t -> 'x, 'r) route
   (** [delete uri] describes a route which matches a [DELETE] request with the

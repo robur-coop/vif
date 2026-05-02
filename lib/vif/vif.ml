@@ -29,6 +29,7 @@ module Route = struct
 
   let get t = Handler (Request (Some `GET, Null), t)
   let head t = Handler (Request (Some `HEAD, Null), t)
+  let options t = Handler (Request (Some `OPTIONS, Null), t)
   let delete t = Handler (Request (Some `DELETE, Null), t)
   let post c t = Handler (Request (Some `POST, c), t)
   let put c t = Handler (Request (Some `PUT, c), t)
