@@ -270,7 +270,7 @@ let handler ~default ~middlewares routes daemon =
     try
       let fn = dispatch ~meth ~request ~target in
       match meth with
-      | `GET | `HEAD | `DELETE ->
+      | `GET | `HEAD | `OPTIONS | `DELETE ->
           (* NOTE(dinosaure): For methods without a request body (Null encoding),
              there is no risk of deadlock between the reader task and the handler.
              We can safely execute the handler inline, avoiding the overhead of
