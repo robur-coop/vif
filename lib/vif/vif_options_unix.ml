@@ -44,18 +44,23 @@ let unix_socket =
   value & opt (some string) None & info [ "U"; "unix-socket" ] ~doc ~docv:"PATH"
 
 let setup_sockaddr inet_addr port unix_socket =
-  match inet_addr, port, unix_socket with
+  match (inet_addr, port, unix_socket) with
   | None, None, None -> Ok Unix.(ADDR_INET (inet_addr_loopback, 8080))
   | None, Some port, None -> Ok Unix.(ADDR_INET (inet_addr_loopback, port))
   | Some inet_addr, None, None -> Ok Unix.(ADDR_INET (inet_addr, 8080))
   | Some inet_addr, Some port, None -> Ok Unix.(ADDR_INET (inet_addr, port))
   | None, _, Some unix_socket -> Ok Unix.(ADDR_UNIX unix_socket)
-  | Some _, _, Some _ -> error_msgf "Impossible to initialize a server on a UNIX socket and an address at the same time"
+  | Some _, _, Some _ ->
+      error_msgf
+        "Impossible to initialize a server on a UNIX socket and an address at \
+         the same time"
 
 let setup_sockaddr =
   let open Term in
   const setup_sockaddr
-  $ inet_addr $ port $ unix_socket
+  $ inet_addr
+  $ port
+  $ unix_socket
   |> term_result ~usage:true
 
 let is_not_directory str =
