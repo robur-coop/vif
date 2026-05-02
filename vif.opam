@@ -46,7 +46,7 @@ run-test: [
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
 pin-depends: [
-  [ "httpcats.dev" "git+https://github.com/theAlexes/httpcats.git#24da9e5e28680454ef6d4f0e4a6b8874dad21820" ]
-  [ "hurl.dev" "git+https://github.com/theAlexes/hurl.git#a40887089ccddc1f1e8d3467a53e41bfab1664c9" ]
-  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#784a934eb90620f8214a264fcd617334305f8b44" ]
+  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#054446c616026e927de575c3e483cd6876a10068" ]
+  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#4e8fd306c305142035f65a1339ca1aa9f011c955" ]
+  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#6b19476a1fa95cdee34150ba8e4f5636d343b908" ]
 ]

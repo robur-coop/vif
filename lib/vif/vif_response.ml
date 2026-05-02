@@ -343,6 +343,9 @@ let run : type a p q.
             m ~tags "run our stream to send a response");
         let stream = Flux.Stream.via via stream in
         Flux.Stream.into into stream;
+        Log.debug (fun m ->
+            let tags = Vif_request0.tags req in
+            m ~tags "stream terminated");
         (Sent, ())
   in
   go s t
