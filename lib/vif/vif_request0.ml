@@ -6,6 +6,7 @@ type 'socket t = {
     request: request
   ; tls: Tls.Core.epoch_data option
   ; reqd: reqd
+  ; conn: conn
   ; socket: 'socket
   ; on_localhost: bool Lazy.t
   ; body: [ `V1 of H1.Body.Reader.t | `V2 of H2.Body.Reader.t ]
@@ -14,6 +15,7 @@ type 'socket t = {
 }
 
 and reqd = Httpcats_core.Server.reqd
+and conn = Httpcats_core.Server.conn
 
 (* and socket = [ `Tcp of Miou_unix.file_descr | `Tls of Tls_miou_unix.t ] *)
 and request = V1 of H1.Request.t | V2 of H2.Request.t
@@ -75,7 +77,7 @@ let to_source ~src = function
         ~close:H2.Body.Reader.close body
 
 let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
-    ?(is_localhost = Fun.const false) socket reqd =
+    ?(is_localhost = Fun.const false) socket conn reqd =
   let request, body =
     match reqd with
     | `V1 reqd -> (V1 (H1.Reqd.request reqd), `V1 (H1.Reqd.request_body reqd))
@@ -95,7 +97,7 @@ let of_reqd ?(with_tls = Fun.const None) ?(peer = Fun.const "<socket>")
     end
   in
   let queries = lazy (Pct.query_of_target target) in
-  { request; tls; reqd; socket; on_localhost; body; queries; tags }
+  { request; tls; reqd; conn; socket; on_localhost; body; queries; tags }
 
 let headers { request; _ } =
   match request with
@@ -135,10 +137,10 @@ let source { reqd; tags; _ } =
       m ~tags "the user request for a source of the request");
   to_source ~src reqd
 
-let close { body; tags; _ } =
+let shutdown { conn; tags; _ } =
   Log.debug (fun m ->
       let tags = Lazy.force tags in
       m ~tags "close the reader body");
-  match body with
-  | `V1 body -> H1.Body.Reader.close body
-  | `V2 body -> H2.Body.Reader.close body
+  match conn with
+  | `H1 conn -> H1.Server_connection.shutdown conn
+  | `H2 conn -> H2.Server_connection.shutdown conn

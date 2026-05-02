@@ -200,7 +200,7 @@ let dispatch_task daemon = function
             Vif_core.Response.(run ~now req0 Empty)
               (fn daemon.server daemon.user's_value)
           in
-          Vif_core.Request0.close req0
+          Vif_core.Request0.shutdown req0
         with exn ->
           let bt = Printexc.get_raw_backtrace () in
           Log.err (fun m ->
@@ -254,8 +254,8 @@ let handler ~default ~middlewares routes daemon =
   let has_middlewares =
     match middlewares with Middlewares.[] -> false | _ -> true
   in
-  fun socket reqd ->
-    let req0 = Vif_core.Request0.of_reqd socket ~is_localhost ~peer reqd in
+  fun socket conn reqd ->
+    let req0 = Vif_core.Request0.of_reqd socket ~is_localhost ~peer conn reqd in
     let env =
       if has_middlewares then begin
         let ctx = to_ctx daemon req0 in
@@ -279,8 +279,13 @@ let handler ~default ~middlewares routes daemon =
               Vif_core.Response.(run ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
-            Vif_core.Request0.close req0
-          with exn -> Vif_core.Request0.report_exn req0 exn
+            Log.debug (fun m -> m "Response terminated, close our request");
+            Vif_core.Request0.shutdown req0
+          with exn ->
+            Log.err (fun m ->
+                m "Unexpected response from our handler: %s"
+                  (Printexc.to_string exn));
+            Vif_core.Request0.report_exn req0 exn
           end
       | _ ->
           (* NOTE(dinosaure): For methods that may carry a request body (POST,
