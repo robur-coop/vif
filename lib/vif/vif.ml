@@ -288,7 +288,7 @@ let handler ~default ~middlewares routes daemon =
                   (Printexc.to_string exn));
             Vif_core.Request0.report_exn req0 exn
           end
-      | _ ->
+      | `PUT | `CONNECT | `TRACE | `POST | `Other _ ->
           (* NOTE(dinosaure): For methods that may carry a request body (POST,
              PUT, PATCH, etc.), the handler must not block the httpcats callback.
              The body is delivered via callbacks from the reader task, and if the
