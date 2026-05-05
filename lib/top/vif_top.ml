@@ -173,7 +173,6 @@ let load cfg str =
 
 let init cfg =
   let ppf = Fmt.stderr in
-  Sys.interactive := true;
   Clflags.native_code := true;
   Clflags.debug := true;
   Topcommon.update_search_path_from_env ();
@@ -184,6 +183,7 @@ let init cfg =
   (* - Toploop.prepare ppf () *)
   Topcommon.set_paths ();
   Toploop.initialize_toplevel_env ();
+  Sys.interactive := false;
   let objs = !Compenv.first_objfiles in
   List.iter (Topdirs.dir_load ppf) objs;
   Topcommon.run_hooks Topcommon.Startup;

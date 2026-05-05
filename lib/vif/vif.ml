@@ -421,23 +421,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   in
   Option.iter Logs.set_reporter cfg.reporter;
   Option.iter Logs.set_level cfg.level;
-  let interactive = !Sys.interactive in
   let domains = Int.min (Miou.Domain.available ()) cfg.domains in
-  let stop =
-    match (interactive, stop) with
-    | _, Some _ -> stop (* if the caller provided a stop, always use it *)
-    | true, None ->
-        (* if we're interactive with no stop, stop on SIGINT *)
-        let stop = Httpcats.Server.stop () in
-        let fn _sigint =
-          Log.debug (fun m -> m "Server shutdown request (SIGINT)");
-          Httpcats.Server.switch stop
-        in
-        let behavior = Sys.Signal_handle fn in
-        ignore (Miou.sys_signal Sys.sigint behavior);
-        Some stop
-    | false, None -> None (* otherwise there's nothing to be done *)
-  in
   let closer, listen =
     match cfg.sockaddr with
     | Unix.ADDR_UNIX path as unix ->
@@ -447,7 +431,6 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
         (Some fd, Httpcats.Server.Use (fd, unix))
     | _ as inet -> (None, Httpcats.Server.Bind inet)
   in
-  Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   let devices =
     if cfg.Vif_config_unix.with_rng then
       let rng =
