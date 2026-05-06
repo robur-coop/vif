@@ -185,7 +185,7 @@ let dispatch_task daemon = function
             Vif_core.Response.(run ~now req0 Empty)
               (fn daemon.server daemon.user's_value)
           in
-          Vif_core.Request0.shutdown req0
+          Vif_core.Request0.close req0
         with exn ->
           let bt = Printexc.get_raw_backtrace () in
           Log.err (fun m ->
@@ -250,7 +250,7 @@ let handler ~default ~middlewares routes daemon =
               Vif_core.Response.(run ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
-            Vif_core.Request0.shutdown req0
+            Vif_core.Request0.close req0
           with exn -> Vif_core.Request0.report_exn req0 exn
           end
       | _ -> begin

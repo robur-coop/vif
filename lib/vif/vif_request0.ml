@@ -137,10 +137,18 @@ let source { reqd; tags; _ } =
       m ~tags "the user request for a source of the request");
   to_source ~src reqd
 
+let close { body; tags; _ } =
+  Log.debug (fun m ->
+      let tags = Lazy.force tags in
+      m ~tags "close the request body reader");
+  match body with
+  | `V1 body -> H1.Body.Reader.close body
+  | `V2 body -> H2.Body.Reader.close body
+
 let shutdown { conn; tags; _ } =
   Log.debug (fun m ->
       let tags = Lazy.force tags in
-      m ~tags "close the reader body");
+      m ~tags "shutdown the http connection");
   match conn with
   | `H1 conn -> H1.Server_connection.shutdown conn
   | `H2 conn -> H2.Server_connection.shutdown conn
