@@ -19,7 +19,7 @@ depends: [
   "fluxt" {>= "0.0.1~beta2"}
   "jsont" {>= "0.2.0"}
   "cmdliner" {>= "1.3.0"}
-  "httpcats" {>= "0.2.0"}
+  "httpcats" {>= "0.3.0"}
   "tyre" {>= "1.0"}
   "mirage-crypto-rng-miou-unix"
   "decompress" {>= "1.5.0"}
@@ -28,7 +28,7 @@ depends: [
   "multipart_form-miou"
   "hmap"
   "tyxml" {>= "4.6.0"}
-  "hurl" {with-test}
+  "hurl" {>= "0.0.1~beta2" & with-test}
   "jws" {with-test}
   "caqti" {with-test & >= "2.3.0"}
   "caqti-miou" {with-test}
@@ -45,8 +45,3 @@ run-test: [
 ]
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
-pin-depends: [
-  [ "hurl.dev" "git+https://github.com/robur-coop/hurl.git#054446c616026e927de575c3e483cd6876a10068" ]
-  [ "miou.dev" "git+https://github.com/robur-coop/miou.git#4e8fd306c305142035f65a1339ca1aa9f011c955" ]
-  [ "httpcats.dev" "git+https://github.com/robur-coop/httpcats.git#3e6cd0d5ae9bfebce9476965778c491b3bb7b415" ]
-]
