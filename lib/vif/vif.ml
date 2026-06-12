@@ -267,8 +267,12 @@ let handler ~default ~middlewares routes daemon =
     let request = Vif_core.recognize_request ~env req0 in
     let target = Vif_core.Request0.target req0 in
     let meth = Vif_core.Request0.meth req0 in
+    let host =
+      let hdrs = Vif_core.Request0.headers req0 in
+      Vif_core.Headers.get hdrs "host"
+    in
     try
-      let fn = dispatch ~meth ~request ~target in
+      let fn = dispatch ~meth ~request ?host target in
       match meth with
       | `GET | `HEAD | `OPTIONS | `DELETE ->
           (* NOTE(dinosaure): For methods without a request body (Null encoding),

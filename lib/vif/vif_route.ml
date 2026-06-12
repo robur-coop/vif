@@ -358,10 +358,10 @@ type 'socket request = {
 let prepare_uri uri =
   uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
 
-let prepare_target target =
+let prepare_target ~host target =
   match String.index_opt target '?' with
-  | None -> target
-  | Some _ -> prepare_uri (Uri.of_string target)
+  | None -> host ^ target
+  | Some _ -> prepare_uri (Uri.of_string (host ^ target))
 
 let rec find_and_trigger : type s r.
     original:string -> s request -> Re.Group.t -> (s, r) re_ex list -> r =
@@ -397,12 +397,13 @@ let dispatch : type s r c.
     -> (s, r) t list
     -> meth:Vif_method.t
     -> request:s request
-    -> target:string
+    -> ?host:string
+    -> string
     -> r =
  fun ~default l ->
   let info = build_info l in
-  fun ~meth ~request:e ~target ->
-    let s = prepare_target target in
+  fun ~meth ~request:e ?(host = "") target ->
+    let s = prepare_target ~host target in
     match match_ info meth s with
     | None -> default (Option.get (e.extract None Any)) s
     | Some (subs, wl) -> (
