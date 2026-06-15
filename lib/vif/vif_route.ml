@@ -123,18 +123,20 @@ let re_atom_query : type e a. int -> (e, a) raw -> int * a re_atom * Re.t =
         let i', w, re = re_atom i e in
         (i', w, re)
 
-type (_, _) re_path =
-  | Start : ('r, 'r) re_path
+type ('f, 'r) re_path =
+  | Start : string option -> (string option -> 'r, 'r) re_path
   | PathAtom : ('f, 'a -> 'r) re_path * 'a re_atom -> ('f, 'r) re_path
 
 let rec re_path : type e r f.
-    int -> (e, f, r) Vif_uri.path -> int * (f, r) re_path * Re.t list =
+       int
+    -> (e, f, r) Vif_uri.path
+    -> int * (string option -> f, r) re_path * Re.t list =
   let open Re in
   fun i -> function
     | Host s ->
-        let re = Re.str @@ Uri.pct_encode ~component:`Host s in
-        (i, Start, [ re ])
-    | Rel -> (i, Start, [])
+        let host = Uri.pct_encode ~component:`Host s in
+        (i, Start (Some host), [])
+    | Rel -> (i, Start None, [])
     | Path_const (p, s) ->
         let i', p, re = re_path i p in
         (i', p, str s :: Ext.slash :: re)
@@ -188,7 +190,9 @@ let re_query current_idx q =
   (grps, wq, b, rel)
 
 type ('f, 'r) re_url =
-  | ReUrl : ('f, 'x) re_path * ('x, 'r) re_query -> ('f, 'r) re_url
+  | ReUrl :
+      (string option -> 'f, 'x) re_path * ('x, 'r) re_query
+      -> ('f, 'r) re_url
 
 let re_url : type e f r.
     int -> (e, f, r) Vif_uri.t -> int * (f, r) re_url * Re.t =
@@ -238,6 +242,8 @@ exception Tyre_exn of exn
 (* NOTE(dinosaure): the goal of this exception is to dispatch correctly errors from
    [conv] values which may fail and exception from [Tyre.Internal.extract]. *)
 
+exception Host_mismatch
+
 (** Extracting atom is just a matter of following the witness. We just need to
     take care of counting where we are in the matching groups. *)
 let extract_atom ~original rea s =
@@ -245,13 +251,18 @@ let extract_atom ~original rea s =
 
 (** Since path is in reversed order, we proceed by continuation. *)
 let rec extract_path : type f x r.
-    original:string -> (f, x) re_path -> Re.Group.t -> (x -> r) -> f -> r =
+       original:string
+    -> (string option -> f, x) re_path
+    -> Re.Group.t
+    -> (string option -> x -> r)
+    -> f
+    -> r =
  fun ~original wp subs k ->
   match wp with
-  | Start -> k
+  | Start host -> k host
   | PathAtom (rep, rea) ->
       let v = extract_atom ~original rea subs in
-      let k f = k (f v) in
+      let k re fn = k re (fn v) in
       extract_path ~original rep subs k
 
 (** Query are in the right order, we can proceed in direct style. *)
@@ -266,11 +277,18 @@ let rec extract_query : type x r.
       extract_query ~original req subs (f v)
 
 let extract_url : type r f.
-    original:string -> (f, r) re_url -> Re.Group.t -> f -> r =
- fun ~original (ReUrl (wp, wq)) subs f ->
-  let k = extract_query ~original wq subs in
+    original:string -> ?host:string -> (f, r) re_url -> Re.Group.t -> f -> r =
+ fun ~original ?host (ReUrl (wp, wq)) subs fn ->
+  let k host' =
+    let () =
+      match (host', host) with
+      | Some host', Some host -> if host <> host' then raise Host_mismatch
+      | _ -> ()
+    in
+    extract_query ~original wq subs
+  in
   let k = extract_path ~original wp subs k in
-  k f
+  k fn
 
 let prepare_uri uri =
   uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
@@ -278,10 +296,10 @@ let prepare_uri uri =
 let extract url =
   let _idx, re_url, re = re_url 1 url in
   let re = Re.(compile @@ whole_string re) in
-  fun ~f uri ->
-    let s = prepare_uri uri in
-    let subs = Re.exec re s in
-    extract_url ~original:s re_url subs f
+  fun ~fn ?host uri ->
+    let str = prepare_uri uri in
+    let subs = Re.exec re str in
+    extract_url ~original:str ?host re_url subs fn
 
 (** {4 Multiple match} *)
 
@@ -355,28 +373,32 @@ type 'socket request = {
       -> ('socket, 'c, 'a) Vif_request.t option
 }
 
-let prepare_uri uri =
-  uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
-
-let prepare_target ~host target =
+let prepare_target target =
   match String.index_opt target '?' with
-  | None -> host ^ target
-  | Some _ -> prepare_uri (Uri.of_string (host ^ target))
+  | None -> target
+  | Some _ -> prepare_uri (Uri.of_string target)
 
-let rec find_and_trigger : type s r.
-    original:string -> s request -> Re.Group.t -> (s, r) re_ex list -> r =
- fun ~original e subs -> function
+let rec find_and_trigger : type socket r.
+       original:string
+    -> ?host:string
+    -> socket request
+    -> Re.Group.t
+    -> (socket, r) re_ex list
+    -> r =
+ fun ~original ?host e subs -> function
   | [] -> raise Not_found
-  | ReEx (Request (meth, c), f, id, re_url) :: l ->
+  | ReEx (Request (meth, c), fn, id, re_url) :: l ->
       if Re.Mark.test subs id then
         match e.extract meth c with
         | None -> find_and_trigger ~original e subs l
-        | Some v -> (
-            try extract_url ~original re_url subs (f v)
-            with Tyre_exn exn ->
-              Log.debug (fun m ->
-                  m "route converter raised exception: %a" Fmt.exn exn);
-              find_and_trigger ~original e subs l)
+        | Some v ->
+            begin try extract_url ~original ?host re_url subs (fn v) with
+            | Tyre_exn exn ->
+                Log.debug (fun m ->
+                    m "route converter raised exception: %a" Fmt.exn exn);
+                find_and_trigger ~original e subs l
+            | Host_mismatch -> find_and_trigger ~original e subs l
+            end
       else find_and_trigger ~original e subs l
 
 let match_ (methods, jokers) meth s =
@@ -403,9 +425,10 @@ let dispatch : type s r c.
  fun ~default l ->
   let info = build_info l in
   fun ~meth ~request:e ?(host = "") target ->
-    let s = prepare_target ~host target in
-    match match_ info meth s with
-    | None -> default (Option.get (e.extract None Any)) s
-    | Some (subs, wl) -> (
-        try find_and_trigger ~original:s e subs wl
-        with Not_found -> default (Option.get (e.extract None Any)) s)
+    let str = prepare_target target in
+    match match_ info meth str with
+    | None -> default (Option.get (e.extract None Any)) str
+    | Some (subs, wl) ->
+        begin try find_and_trigger ~original:str ~host e subs wl
+        with Not_found -> default (Option.get (e.extract None Any)) str
+        end
