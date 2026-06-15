@@ -44,10 +44,8 @@
   $ vif --pid-file vif.pid main.ml -p $PORT &
   $ ./../../waitfile.exe vif.pid
   $ hurl http://localhost:$PORT/index.html -p=h
-  transfer-encoding: chunked
-  etag: a127b2e10213e869311e4413f33ef0a8e5c69c2d407ca4056afedbabc695359d
-  content-type: text/html
-  content-length: 105
+  content-length: 127
+  content-type: text/plain; charset=utf-8
   $ kill -INT $(cat vif.pid)
   $ cd ../../
 
@@ -60,7 +58,7 @@ One might think this matches the "horse" route, but it is actually matched by
 the "number" route - but the "number" route does not trigger as the converter
 raises an exception through `int_of_string`!
   $ hurl http://localhost:$PORT/horse -p=b | head -n1
-  Unspecified destination /horse (GET):
+  Unspecified destination localhost/horse (GET):
   $ kill -INT $(cat vif.pid)
 
   $ cd examples/19-regex-method/
