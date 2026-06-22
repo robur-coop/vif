@@ -40,9 +40,9 @@ module Uri = struct
   let option = Tyre.opt
   let conv = Tyre.conv
 
-  let execp uri s =
+  let execp uri str =
     let re = Vif_route.get_re uri in
-    Re.execp (Re.compile (Re.whole_string re)) s
+    Re.execp (Re.compile (Re.whole_string re)) str
 
   let extract uri s f =
     let _i'dunno, re_url, re = Vif_route.re_url 1 uri in

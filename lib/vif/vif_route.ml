@@ -123,25 +123,33 @@ let re_atom_query : type e a. int -> (e, a) raw -> int * a re_atom * Re.t =
         let i', w, re = re_atom i e in
         (i', w, re)
 
-type (_, _) re_path =
+type ('f, 'r) re_path =
   | Start : ('r, 'r) re_path
   | PathAtom : ('f, 'a -> 'r) re_path * 'a re_atom -> ('f, 'r) re_path
 
 let rec re_path : type e r f.
-    int -> (e, f, r) Vif_uri.path -> int * (f, r) re_path * Re.t list =
+    int -> (e, f, r) Vif_uri.path -> bool * int * (f, r) re_path * Re.t list =
   let open Re in
   fun i -> function
-    | Host s ->
-        let re = Re.str @@ Uri.pct_encode ~component:`Host s in
-        (i, Start, [ re ])
-    | Rel -> (i, Start, [])
+    | Host str ->
+        let re = Re.str (Uri.pct_encode ~component:`Host str) in
+        (true, i, Start, [ re ])
+    | Rel ->
+        (* NOTE(dinosaure): a relative route must match {i regardless} of the
+           host. As the host (when available) is prepended to the string we try
+           to match (see {!val:prepare_target}), we let the route optionally
+           consume such a host prefix (anything up to the first ['/']). This is
+           what allows [rel] and [host] routes to coexist in the same dispatch
+           table. *)
+        let re = opt (rep1 (compl [ Ext.slash ])) in
+        (false, i, Start, [ re ])
     | Path_const (p, s) ->
-        let i', p, re = re_path i p in
-        (i', p, str s :: Ext.slash :: re)
+        let with_host, i', p, re = re_path i p in
+        (with_host, i', p, str s :: Ext.slash :: re)
     | Path_atom (p, a) ->
-        let i', wp, rp = re_path i p in
+        let with_host, i', wp, rp = re_path i p in
         let i'', wa, ra = re_atom_path i' @@ from_t a in
-        (i'', PathAtom (wp, wa), List.rev_append ra rp)
+        (with_host, i'', PathAtom (wp, wa), List.rev_append ra rp)
 
 type ('fu, 'ret) re_query =
   | Nil : ('r, 'r) re_query
@@ -188,26 +196,27 @@ let re_query current_idx q =
   (grps, wq, b, rel)
 
 type ('f, 'r) re_url =
-  | ReUrl : ('f, 'x) re_path * ('x, 'r) re_query -> ('f, 'r) re_url
+  | ReUrl : bool * ('f, 'x) re_path * ('x, 'r) re_query -> ('f, 'r) re_url
 
 let re_url : type e f r.
     int -> (e, f, r) Vif_uri.t -> int * (f, r) re_url * Re.t =
  fun i -> function
-  | Url (slash, p, q) -> (
+  | Url (slash, p, q) -> begin
       let end_path =
         match slash with
         | No_slash -> Re.epsilon
         | Slash -> Re.char '/'
         | Maybe_slash -> Re.(opt @@ char '/')
       in
-      let idx, wp, rp = re_path i p in
+      let with_host, idx, wp, rp = re_path i p in
       match q with
-      | Nil -> (idx, ReUrl (wp, Nil), Re.seq @@ List.rev (end_path :: rp))
+      | Nil ->
+          let re = Re.seq (List.rev (end_path :: rp)) in
+          (idx, ReUrl (with_host, wp, Nil), re)
       | Any ->
           let end_re = Re.(opt @@ seq [ Re.char '?'; rep any ]) in
-          ( idx
-          , ReUrl (wp, Nil)
-          , Re.seq @@ List.rev_append rp [ end_path; end_re ] )
+          let re = Re.seq (List.rev_append rp [ end_path; end_re ]) in
+          (idx, ReUrl (with_host, wp, Nil), re)
       | _ ->
           let grps, wq, any_query, rel = re_query idx q in
           let query_sep = Ext.query_sep ~any:any_query in
@@ -226,7 +235,8 @@ let re_url : type e f r.
           let re =
             Re.seq @@ List.rev_append rp (end_path :: Re.char '?' :: re)
           in
-          (idx + grps, ReUrl (wp, wq), re))
+          (idx + grps, ReUrl (with_host, wp, wq), re)
+    end
 
 let get_re url =
   let _, _, re = re_url 1 url in
@@ -251,7 +261,7 @@ let rec extract_path : type f x r.
   | Start -> k
   | PathAtom (rep, rea) ->
       let v = extract_atom ~original rea subs in
-      let k f = k (f v) in
+      let k fn = k (fn v) in
       extract_path ~original rep subs k
 
 (** Query are in the right order, we can proceed in direct style. *)
@@ -267,21 +277,35 @@ let rec extract_query : type x r.
 
 let extract_url : type r f.
     original:string -> (f, r) re_url -> Re.Group.t -> f -> r =
- fun ~original (ReUrl (wp, wq)) subs f ->
+ fun ~original (ReUrl (_with_host, wp, wq)) subs fn ->
   let k = extract_query ~original wq subs in
   let k = extract_path ~original wp subs k in
-  k f
+  k fn
 
-let prepare_uri uri =
-  uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
+let prepare_target ?host target =
+  let target =
+    match String.index_opt target '?' with
+    | None -> target
+    | Some _ ->
+        let uri = Uri.of_string target in
+        uri
+        |> Uri.query
+        |> sort_query
+        |> Uri.with_query uri
+        |> Uri.path_and_query
+  in
+  match host with
+  | Some host -> Uri.pct_encode ~component:`Host host ^ target
+  | None -> target
 
 let extract url =
-  let _idx, re_url, re = re_url 1 url in
+  let _idx, (ReUrl (with_host, _, _) as re_url), re = re_url 1 url in
   let re = Re.(compile @@ whole_string re) in
-  fun ~f uri ->
-    let s = prepare_uri uri in
-    let subs = Re.exec re s in
-    extract_url ~original:s re_url subs f
+  fun ~fn ?host uri ->
+    let host = if with_host then host else None in
+    let str = prepare_target ?host (Uri.path_and_query uri) in
+    let subs = Re.exec re str in
+    extract_url ~original:str re_url subs fn
 
 (** {4 Multiple match} *)
 
@@ -312,11 +336,11 @@ let rec build_info_list : type s r.
     -> Re.t list * (s, r) re_ex list =
  fun p idx -> function
   | [] -> ([], [])
-  | Route ((Request (meth, _) as req), url, f) :: l when p meth ->
+  | Route ((Request (meth, _) as req), url, fn) :: l when p meth ->
       let idx, re_url, re = re_url idx url in
       let rel, wl = build_info_list p idx l in
       let id, re = Re.mark re in
-      (re :: rel, ReEx (req, f, id, re_url) :: wl)
+      (re :: rel, ReEx (req, fn, id, re_url) :: wl)
   | Route (Request _, _, _) :: l -> build_info_list p idx l
 
 let build_info_list p l =
@@ -355,28 +379,26 @@ type 'socket request = {
       -> ('socket, 'c, 'a) Vif_request.t option
 }
 
-let prepare_uri uri =
-  uri |> Uri.query |> sort_query |> Uri.with_query uri |> Uri.path_and_query
-
-let prepare_target target =
-  match String.index_opt target '?' with
-  | None -> target
-  | Some _ -> prepare_uri (Uri.of_string target)
-
-let rec find_and_trigger : type s r.
-    original:string -> s request -> Re.Group.t -> (s, r) re_ex list -> r =
+let rec find_and_trigger : type socket r.
+       original:string
+    -> socket request
+    -> Re.Group.t
+    -> (socket, r) re_ex list
+    -> r =
  fun ~original e subs -> function
   | [] -> raise Not_found
-  | ReEx (Request (meth, c), f, id, re_url) :: l ->
+  | ReEx (Request (meth, c), fn, id, re_url) :: l ->
       if Re.Mark.test subs id then
-        match e.extract meth c with
+        begin match e.extract meth c with
         | None -> find_and_trigger ~original e subs l
-        | Some v -> (
-            try extract_url ~original re_url subs (f v)
+        | Some v ->
+            begin try extract_url ~original re_url subs (fn v)
             with Tyre_exn exn ->
               Log.debug (fun m ->
                   m "route converter raised exception: %a" Fmt.exn exn);
-              find_and_trigger ~original e subs l)
+              find_and_trigger ~original e subs l
+            end
+        end
       else find_and_trigger ~original e subs l
 
 let match_ (methods, jokers) meth s =
@@ -397,14 +419,16 @@ let dispatch : type s r c.
     -> (s, r) t list
     -> meth:Vif_method.t
     -> request:s request
-    -> target:string
+    -> ?host:string
+    -> string
     -> r =
  fun ~default l ->
   let info = build_info l in
-  fun ~meth ~request:e ~target ->
-    let s = prepare_target target in
-    match match_ info meth s with
-    | None -> default (Option.get (e.extract None Any)) s
-    | Some (subs, wl) -> (
-        try find_and_trigger ~original:s e subs wl
-        with Not_found -> default (Option.get (e.extract None Any)) s)
+  fun ~meth ~request:e ?host target ->
+    let str = prepare_target ?host target in
+    match match_ info meth str with
+    | None -> default (Option.get (e.extract None Any)) str
+    | Some (subs, wl) ->
+        begin try find_and_trigger ~original:str e subs wl
+        with Not_found -> default (Option.get (e.extract None Any)) str
+        end
