@@ -127,15 +127,17 @@ let static ?(top = pwd) =
                   let mime = mime_type abs_path in
                   let fn mime =
                     let value = { V.mtime= stat.Unix.st_mtime; mime } in
-                    Cache.add abs_path value cache in
-                  Option.iter fn mime;
-                  mime
+                    Cache.add abs_path value cache
+                  in
+                  Option.iter fn mime; mime
             in
             let src = file (Fpath.to_string abs_path) in
             let* _ = Response.content_length stat.Unix.st_size in
-            let* () = match mime with
+            let* () =
+              match mime with
               | Some mime -> Response.add ~field:"content-type" mime
-              | None -> Response.return () in
+              | None -> Response.return ()
+            in
             let field = "etag" in
             let* () = Response.add ~field (sha256sum abs_path) in
             let* () = Response.with_source req src in
