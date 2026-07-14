@@ -15,8 +15,8 @@ type user =
   ; username : string 
   ; password : Digestif.SHA256.t }
 
-let[@alert "-caqti_unstable"] user =
-  let open Caqti_template.Row_type in
+let user =
+  let open Caqti.Template.Row_type in
   let sha256 =
     let encode hash = Ok (Digestif.SHA256.to_hex hash) in
     let decode hex = Ok (Digestif.SHA256.of_hex hex) in
@@ -43,7 +43,7 @@ let caqti =
   let finally pool = Caqti_miou_unix.Pool.drain pool in
   Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri; _ } ->
   match Caqti_miou_unix.connect_pool ~sw uri with
-  | Error err -> Fmt.failwith "%a" Caqti_error.pp err
+  | Error err -> Fmt.failwith "%a" Caqti.Error.pp err
   | Ok pool -> pool
 
 let index username : Tyxml_html.doc =

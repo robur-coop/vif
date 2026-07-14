@@ -1,7 +1,13 @@
 (executable
  (name main)
  (modules main)
- (libraries vif jws.jwt caqti-miou caqti-miou.unix caqti-driver-sqlite3))
+ (libraries
+  vif
+  jws.jwt
+  caqti-miou
+  caqti-miou.unix
+  caqti-driver-sqlite3
+  caqti.classic))
 
 (executable
  (name chat)
