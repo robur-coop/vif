@@ -101,32 +101,33 @@ let recognize_request ~env req0 =
          Vif_method.t option
       -> (c, a) Vif_type.t
       -> ('s, c, a) Vif_request.t option =
-   fun meth c ->
+   fun meth encoding ->
     let none = true in
     let some = ( = ) (Vif_request0.meth req0) in
     let meth_match = Option.fold ~none ~some meth in
+    let (Vif_type.Type c) = encoding in
     match c with
-    | Vif_type.Any as encoding ->
+    | Vif_type.Any | Option Any ->
         if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Null as encoding ->
+    | Null | Option Null ->
         if meth_match then Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Json_encoding _ as encoding ->
+    | Json_encoding _ | Option (Json_encoding _) ->
         let c = content_type req0 in
         let type_match = Result.map is_application_json c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Multipart_form_encoding _ as encoding ->
+    | Multipart_form_encoding _ | Option (Multipart_form_encoding _) ->
         let c = content_type req0 in
         let type_match = Result.map is_multipart_form_data c in
         let type_match = Result.value ~default:false type_match in
         if type_match && meth_match then
           Some (Vif_request.of_req0 ~encoding ~env req0)
         else None
-    | Multipart_form as encoding ->
+    | Multipart_form | Option Multipart_form ->
         let c = content_type req0 in
         let type_match = Result.map is_multipart_form_data c in
         let type_match = Result.value ~default:false type_match in
@@ -339,7 +340,7 @@ module Request = struct
          ('s, Vif_type.multipart_form, a) Vif_request.t
       -> (a, [> `Invalid_multipart_form | `Not_found of string ]) result =
     function
-    | { encoding= Multipart_form_encoding r; _ } as req ->
+    | { encoding= Type (Multipart_form_encoding r); _ } as req ->
         let ( let* ) = Result.bind in
         let* raw = Multipart_form.parse req in
         begin try Ok (Multipart_form.get_record r raw) with
@@ -351,6 +352,9 @@ module Request = struct
                   (Printexc.to_string exn));
             Error `Invalid_multipart_form
         end
-    | { encoding= Multipart_form; _ } as req -> Ok (Multipart_form.stream req)
-    | { encoding= Any; _ } -> assert false
+    | { encoding= Type Multipart_form; _ } as req ->
+        Ok (Multipart_form.stream req)
+    | { encoding= Type Any; _ } ->
+        assert false (* TODO(dinosaure): verify it! *)
+    | { encoding= Type (Option _); _ } -> assert false (* TODO *)
 end
