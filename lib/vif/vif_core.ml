@@ -334,6 +334,8 @@ end
 module Request = struct
   include Vif_request
 
+  let log_tags = tags
+
   let of_multipart_form : type a.
          ('s, Vif_type.multipart_form, a) Vif_request.t
       -> (a, [> `Invalid_multipart_form | `Not_found of string ]) result =
