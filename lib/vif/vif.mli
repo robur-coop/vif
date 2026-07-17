@@ -755,10 +755,10 @@ module Server : sig
   type t
 
   val device : ('value, 'a) Device.device -> t -> 'a
-  (* [device w t] returns the device specified by the [w] parameter and the
-     server [t].
+  (** [device w t] returns the device specified by the [w] parameter and the
+      server [t].
 
-     @raise Not_found if the given device was not initialized via the
+      @raise Not_found if the given device was not initialized via the
        {!val:Vif.run} function. *)
 end
 
