@@ -751,18 +751,20 @@ module Devices : sig
     | ( :: ) : ('value, 'a) Device.device * 'value t -> 'value t
 end
 
+module Metrics : sig
+  type t
+
+  val informational : t -> int
+  val successful : t -> int
+  val redirection : t -> int
+  val client_error : t -> int
+  val server_error : t -> int
+end
+
 module Server : sig
   type t
 
-  type metrics = {
-    informational : int ; (* code 1xx *)
-    successful : int ; (* code 2xx *)
-    redirection : int ; (* code 3xx *)
-    client_error : int ; (* code 4xx *)
-    server_error : int ; (* code 5xx *)
-  }
-
-  val metrics : t -> metrics
+  val metrics : t -> Metrics.t
   (** [metrics t] are the current metrics of [t]. *)
 
   val device : ('value, 'a) Device.device -> t -> 'a
