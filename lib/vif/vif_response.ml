@@ -181,7 +181,17 @@ let empty =
 
 let websocket = Websocket
 
+let update_metrics m = function
+  | #H1.informational -> { m with informational = succ m.informational }
+  | #successful -> { m with successful = succ m.succesful }
+  | #redirection -> { m with redirection = succ m.redirection }
+  | #client_error -> { m with client_error = succ m.client_error }
+  | #server_error -> { m with server_error = succ m.server_error }
+
 let respond_string ?headers:(hdrs = []) status req0 str =
+  (* need to get the metrics from server.metrics *)
+  let metrics = t.Vif_server.metrics in
+  t.metrics <- update_metrics metrics status;
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in
@@ -199,6 +209,9 @@ let respond_string ?headers:(hdrs = []) status req0 str =
 
 let response ?headers:(hdrs = []) status req0 =
   let tags = Vif_request0.tags req0 in
+  (* need to get the metrics from server.metrics *)
+  let metrics = t.Vif_server.metrics in
+  t.metrics <- update_metrics metrics status;
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in

@@ -416,6 +416,11 @@ let bind_unix_socket backlog unix =
   Miou_unix.bind_and_listen ~backlog fd unix;
   fd
 
+(* doing this makes the compiler unhappy -- also the metrics need to be mutable! *)
+let metrics =
+  Device.v ~name:"metrics" ~finally:(fun _ -> ()) Device.[]
+    (fun _ -> Server.empty_metrics)
+
 let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ?(handlers = []) ?websocket ?stop routes user's_value =
   let cfg =
@@ -464,9 +469,11 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   in
   let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
-  let server =
-    { Vif_core.Server.devices; cookie_key= cfg.Vif_config_unix.cookie_key }
-  in
+  let server = {
+    Server.devices;
+    cookie_key= cfg.Vif_config_unix.cookie_key;
+    metrics = Server.empty_metrics
+  } in
   let default = default_from_handlers handlers in
   let websocket =
     match websocket with
