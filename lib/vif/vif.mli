@@ -754,6 +754,17 @@ end
 module Server : sig
   type t
 
+  type metrics = {
+    informational : int ; (* code 1xx *)
+    successful : int ; (* code 2xx *)
+    redirection : int ; (* code 3xx *)
+    client_error : int ; (* code 4xx *)
+    server_error : int ; (* code 5xx *)
+  }
+
+  val metrics : t -> metrics
+  (** [metrics t] are the current metrics of [t]. *)
+
   val device : ('value, 'a) Device.device -> t -> 'a
   (* [device w t] returns the device specified by the [w] parameter and the
      server [t].
