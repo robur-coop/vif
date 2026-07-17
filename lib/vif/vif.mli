@@ -672,7 +672,7 @@ module Device : sig
       it is possible to initialise a connection pool when the Vif server is
       launched, which can then be used by our request handlers {b in parallel}.
       It is therefore a {b global} resource that can be retrieved within request
-      handlers using {!val:Server.get}. Here is an example of a [caqti]
+      handlers using {!val:Server.device}. Here is an example of a [caqti]
       {i device} (used to communicate with an SQL server):
 
       {[
