@@ -181,17 +181,18 @@ let empty =
 
 let websocket = Websocket
 
-let update_metrics m = function
-  | #H1.informational -> { m with informational = succ m.informational }
-  | #successful -> { m with successful = succ m.succesful }
-  | #redirection -> { m with redirection = succ m.redirection }
-  | #client_error -> { m with client_error = succ m.client_error }
-  | #server_error -> { m with server_error = succ m.server_error }
+let update_metrics m status =
+  let open Vif_metrics in
+  match status with
+  | #H1.Status.informational -> Atomic.incr m.informational
+  | #H1.Status.successful -> Atomic.incr m.successful
+  | #H1.Status.redirection -> Atomic.incr m.redirection
+  | #H1.Status.client_error -> Atomic.incr m.client_error
+  | #H1.Status.server_error -> Atomic.incr m.server_error
+  | _ -> ()
 
-let respond_string ?headers:(hdrs = []) status req0 str =
-  (* need to get the metrics from server.metrics *)
-  let metrics = t.Vif_server.metrics in
-  t.metrics <- update_metrics metrics status;
+let respond_string server ?headers:(hdrs = []) status req0 str =
+  update_metrics server.Vif_server.metrics status;
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in
@@ -207,11 +208,9 @@ let respond_string ?headers:(hdrs = []) status req0 str =
       let resp = H2.Response.create ~headers:hdrs status in
       H2.Reqd.respond_with_string reqd resp str
 
-let response ?headers:(hdrs = []) status req0 =
+let response server ?headers:(hdrs = []) status req0 =
   let tags = Vif_request0.tags req0 in
-  (* need to get the metrics from server.metrics *)
-  let metrics = t.Vif_server.metrics in
-  t.metrics <- update_metrics metrics status;
+  update_metrics server.Vif_server.metrics status;
   match Vif_request0.reqd req0 with
   | `V1 reqd ->
       let hdrs = H1.Headers.of_list hdrs in
@@ -265,12 +264,13 @@ let get_nonce req =
   Vif_headers.get hdrs "sec-websocket-key"
 
 let run : type a p q.
-       now:(unit -> int32)
+       Vif_server.t
+    -> now:(unit -> int32)
     -> 'socket Vif_request0.t
     -> p state
     -> (p, q, a) t
     -> q state * a =
- fun ~now req s t ->
+ fun server ~now req s t ->
   let headers = ref [] in
   let rec go : type a p q. p state -> (p, q, a) t -> q state * a =
    fun s t ->
@@ -314,7 +314,7 @@ let run : type a p q.
                 let tags = Vif_request0.tags req in
                 m ~tags "new response (fast path) with: @[<hov>%a@]"
                   Vif_headers.pp headers);
-            respond_string ~headers status req str;
+            respond_string server ~headers status req str;
             (Sent, ())
         | _ ->
             let stream = Flux.Source.list [ str ] |> Flux.Stream.from in
@@ -350,7 +350,7 @@ let run : type a p q.
         Log.debug (fun m ->
             let tags = Vif_request0.tags req in
             m ~tags "new response with: @[<hov>%a@]" Vif_headers.pp headers);
-        let into = response ~headers status req in
+        let into = response server ~headers status req in
         Log.debug (fun m ->
             let tags = Vif_request0.tags req in
             m ~tags "run our stream to send a response");

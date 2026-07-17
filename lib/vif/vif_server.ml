@@ -1,23 +1,7 @@
-type metrics = {
-  informational : int ;
-  successful : int ;
-  redirection : int ;
-  client_error : int ;
-  server_error : int ;
-}
-
-let empty_metrics = {
-  informational = 0 ;
-  successful = 0 ;
-  redirection = 0 ;
-  client_error = 0 ;
-  server_error = 0 ;
-}
-
 type t = {
-  devices: Vif_device.Hmap.t;
-  cookie_key: Mirage_crypto.AES.GCM.key;
-  mutable metrics: metrics;
+    devices: Vif_device.Hmap.t
+  ; cookie_key: Mirage_crypto.AES.GCM.key
+  ; mutable metrics: Vif_metrics.t
 }
 
 let metrics t = t.metrics

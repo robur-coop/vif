@@ -12,6 +12,7 @@ module Headers = Vif_core.Headers
 module Cookie = Vif_core.Cookie
 module Devices = Vif_core.Devices
 module Multipart_form = Vif_core.Multipart_form
+module Metrics = Vif_core.Metrics
 
 module Handler = struct
   include Vif_core.Handler
@@ -182,7 +183,7 @@ let dispatch_task daemon = function
       let fn () =
         try
           let Vif_core.Response.Sent, () =
-            Vif_core.Response.(run ~now req0 Empty)
+            Vif_core.Response.(run daemon.server ~now req0 Empty)
               (fn daemon.server daemon.user's_value)
           in
           Vif_core.Request0.close req0
@@ -251,7 +252,7 @@ let handler ~default ~middlewares routes daemon =
       | `GET | `HEAD | `DELETE ->
           begin try
             let Vif_core.Response.Sent, () =
-              Vif_core.Response.(run ~now req0 Empty)
+              Vif_core.Response.(run daemon.server ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
             Vif_core.Request0.close req0
@@ -342,7 +343,13 @@ let default_from_handlers handlers req target server user's_value =
 let run ~cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ?(handlers = []) tcpv4 routes user's_value =
   let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
-  let server = { Vif_core.Server.devices; cookie_key= cfg.Config.cookie_key } in
+  let server =
+    {
+      Vif_core.Server.devices
+    ; cookie_key= cfg.Config.cookie_key
+    ; metrics= Metrics.empty ()
+    }
+  in
   let default = default_from_handlers handlers in
   let fn0 = handler ~default ~middlewares routes in
   let rd0 = Miou.Computation.create () in
