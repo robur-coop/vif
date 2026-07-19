@@ -417,8 +417,12 @@ let bind_unix_socket backlog unix =
   Miou_unix.bind_and_listen ~backlog fd unix;
   fd
 
+let _server = ref None
+
+let server () = !_server
+
 let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
-    ?(handlers = []) ?websocket ?stop routes user's_value =
+    ?(handlers = []) ?websocket ?stop ?more_tasks routes user's_value =
   let cfg =
     match cfg with
     | Some cfg -> cfg
@@ -472,6 +476,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     ; metrics= Metrics.empty ()
     }
   in
+  _server := Some server;
   let default = default_from_handlers handlers in
   let websocket =
     match websocket with
@@ -508,6 +513,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   in
   Miou.await_exn prm0;
   Miou.await_exn prm1;
+  List.iter Miou.await_exn (Option.value ~default:[] more_tasks);
   List.iter (function Ok () -> () | Error exn -> raise exn) prmn;
   Option.iter Miou_unix.close closer;
   Devices.finally (Vif_core.Device.Devices devices);
