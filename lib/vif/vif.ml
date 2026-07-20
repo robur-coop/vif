@@ -257,6 +257,14 @@ let handler ~default ~middlewares routes daemon =
   in
   fun socket conn reqd ->
     let req0 = Vif_core.Request0.of_reqd socket ~is_localhost ~peer conn reqd in
+    let tags = Vif_core.Request0.tags req0 in
+    Log.debug (fun m -> m ~tags "%s %s"
+                  (match req0.Vif_core.Request0.request with
+                   | Vif_core.Request0.V1 req -> Httpun_types.Method.to_string req.H1.Request.meth
+                   | V2 req -> H2.Method.to_string req.H2.Request.meth)
+                  (match req0.Vif_core.Request0.request with
+                   | Vif_core.Request0.V1 req -> req.H1.Request.target
+                   | V2 req -> req.H2.Request.target));
     let env =
       if has_middlewares then begin
         let ctx = to_ctx daemon req0 in
@@ -284,11 +292,11 @@ let handler ~default ~middlewares routes daemon =
               Vif_core.Response.(run ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
-            Log.debug (fun m -> m "Response terminated, close our request");
+            Log.debug (fun m -> m ~tags "Response terminated, close our request");
             Vif_core.Request0.close req0
           with exn ->
             Log.err (fun m ->
-                m "Unexpected response from our handler: %s"
+                m ~tags "Unexpected response from our handler: %s"
                   (Printexc.to_string exn));
             Vif_core.Request0.report_exn req0 exn
           end
@@ -307,8 +315,8 @@ let handler ~default ~middlewares routes daemon =
     with exn ->
       let bt = Printexc.get_raw_backtrace () in
       Log.err (fun m ->
-          m "Unexpected exception from dispatch: %s" (Printexc.to_string exn));
-      Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
+          m ~tags "Unexpected exception from dispatch: %s" (Printexc.to_string exn));
+      Log.err (fun m -> m ~tags "%s" (Printexc.raw_backtrace_to_string bt));
       raise exn
 
 let ws_handler daemon fn ?stop flow =
