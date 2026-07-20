@@ -1143,12 +1143,11 @@ type oc = Httpcats.Server.Websocket.oc
 
 val run :
      ?cfg:config
-  -> ?devices:'value Devices.t
+  -> ?devices:(Server.t * 'value) Devices.t
   -> ?middlewares:'value Middlewares.t
   -> ?handlers:('c, 'value) Handler.t list
   -> ?websocket:(ic -> oc -> Server.t -> 'value -> unit)
   -> ?stop:Httpcats.Server.stop
-  -> ?more_tasks:unit Miou.t list
   -> (Server.t -> 'value -> (Response.empty, Response.sent, unit) Response.t)
      Route.t
      list
@@ -1156,7 +1155,6 @@ val run :
   -> unit
 
 (**/*)
-val server : unit -> Server.t option
 
 val setup_config : unit Cmdliner.Term.t
 val reporter : sources:Re.t option -> ppf:Format.formatter -> Logs.reporter

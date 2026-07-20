@@ -4,7 +4,7 @@ type foo = Foo ;;
 
 let foo =
   let finally Foo = () in
-  Vif.Device.v ~name:"foo" ~finally [] @@ fun () -> Foo
+  Vif.Device.v ~name:"foo" ~finally [] @@ fun _ -> Foo
 ;;
 
 let default req server () =

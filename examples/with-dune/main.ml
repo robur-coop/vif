@@ -41,7 +41,7 @@ let jwt =
 
 let caqti =
   let finally pool = Caqti_miou_unix.Pool.drain pool in
-  Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri; _ } ->
+  Vif.Device.v ~name:"caqti" ~finally [] @@ fun (_, { sw; uri; _ }) ->
   match Caqti_miou_unix.connect_pool ~sw uri with
   | Error err -> Fmt.failwith "%a" Caqti.Error.pp err
   | Ok pool -> pool
