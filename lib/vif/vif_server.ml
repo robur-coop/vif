@@ -1,7 +1,7 @@
 type t = {
     devices: Vif_device.Hmap.t
   ; cookie_key: Mirage_crypto.AES.GCM.key
-  ; mutable metrics: Vif_metrics.t
+  ; metrics: Vif_metrics.t
 }
 
 let metrics t = t.metrics
