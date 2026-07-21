@@ -13,6 +13,7 @@ module Headers = Vif_core.Headers
 module Cookie = Vif_core.Cookie
 module Devices = Vif_core.Devices
 module Multipart_form = Vif_core.Multipart_form
+module Metrics = Vif_core.Metrics
 
 module Route = struct
   include Vif_core.Route
@@ -198,7 +199,7 @@ let dispatch_task daemon = function
       let fn () =
         try
           let Vif_core.Response.Sent, () =
-            Vif_core.Response.(run ~now req0 Empty)
+            Vif_core.Response.(run daemon.server ~now req0 Empty)
               (fn daemon.server daemon.user's_value)
           in
           Vif_core.Request0.close req0
@@ -281,7 +282,7 @@ let handler ~default ~middlewares routes daemon =
              the queue/daemon/Miou.async pattern. *)
           begin try
             let Vif_core.Response.Sent, () =
-              Vif_core.Response.(run ~now req0 Empty)
+              Vif_core.Response.(run daemon.server ~now req0 Empty)
                 (fn daemon.server daemon.user's_value)
             in
             Log.debug (fun m -> m "Response terminated, close our request");
@@ -462,11 +463,18 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
       Devices.(rng :: devices)
     else devices
   in
-  let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
   Logs.debug (fun m -> m "devices launched");
   let server =
-    { Vif_core.Server.devices; cookie_key= cfg.Vif_config_unix.cookie_key }
+    {
+      Server.devices= Device.Hmap.empty
+    ; cookie_key= cfg.Vif_config_unix.cookie_key
+    ; metrics= Metrics.empty ()
+    }
   in
+  let devices =
+    Devices.run Vif_core.Device.Hmap.empty devices (server, user's_value)
+  in
+  let server = { server with devices } in
   let default = default_from_handlers handlers in
   let websocket =
     match websocket with

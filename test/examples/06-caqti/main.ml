@@ -10,7 +10,7 @@ type cfg =
 
 let caqti =
   let finally (module Conn : Caqti_miou.CONNECTION) = Conn.disconnect () in
-  Vif.Device.v ~name:"caqti" ~finally [] @@ fun { sw; uri } ->
+  Vif.Device.v ~name:"caqti" ~finally [] @@ fun (_, { sw; uri }) ->
   match Caqti_miou_unix.connect ~sw uri with
   | Ok conn -> conn
   | Error err ->

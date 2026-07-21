@@ -1,4 +1,10 @@
-type t = { devices: Vif_device.Hmap.t; cookie_key: Mirage_crypto.AES.GCM.key }
+type t = {
+    devices: Vif_device.Hmap.t
+  ; cookie_key: Mirage_crypto.AES.GCM.key
+  ; metrics: Vif_metrics.t
+}
+
+let metrics t = t.metrics
 
 let device : type a. ('value, a) Vif_device.device -> t -> a =
  fun (Vif_device.Device (_, _, k)) { devices; _ } ->

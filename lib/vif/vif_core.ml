@@ -12,6 +12,7 @@ module Status = Vif_status
 module Cookie = Vif_cookie
 module Route = Vif_route
 module Tags = Vif_tags
+module Metrics = Vif_metrics
 
 let src = Logs.Src.create "vif.core"
 

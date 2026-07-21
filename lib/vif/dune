@@ -20,6 +20,7 @@
   vif_route
   vif_status
   vif_uri
+  vif_metrics
   vif_tags)
  (libraries
   multipart_form
