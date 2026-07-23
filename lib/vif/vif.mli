@@ -253,12 +253,12 @@ module Uri : sig
 
   val ( //? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   (** [path //? queries] is an operator which permits to construct an URI where
-      the slash at theend of the given path [path] {b is required} and delimit
+      the slash at the end of the given path [path] {b is required} and delimit
       queries then. *)
 
   val ( /?? ) : ('e, 'f, 'x) path -> ('e, 'x, 'r) query -> ('e, 'f, 'r) t
   (** [path /?? queries] is an operator which permits to construct an URI where
-      the slash is {b optionnal} between the given path [path] and queries. *)
+      the slash is {b optional} between the given path [path] and queries. *)
 
   val keval : ?slash:bool -> (Tyre.evaluable, 'f, 'r) t -> (string -> 'r) -> 'f
   (** [keval ?slash uri fn] compiles an URI [uri] into a [string] and pass it to
@@ -798,11 +798,11 @@ module Middlewares : sig
             let data = String.split_on_char ':' data in
             let username = List.hd data and password = List.tl data in
             let password = String.concat ":" password in
-            Some (username password)
+            Some (username, password)
         | _ -> None
 
       let auth =
-        VIf.Middlewares.v ~name:"auth" @@ fun req _target _server _ ->
+        Vif.Middlewares.v ~name:"auth" @@ fun req _target _server _ ->
         let hdrs = Vif.Request.headers_of_request req in
         let* value = Vif.Headers.get hdrs "Authorization" in
         let* username, password = decode value in
@@ -1009,18 +1009,18 @@ module Response : sig
 
   val add : field:string -> string -> ('p, 'p, unit) t
   (** [add ~field value] adds a new [field] with the given [value] into the
-      futur response. *)
+      future response. *)
 
   val rem : field:string -> ('p, 'p, unit) t
-  (** [rem ~field value] removes a [field] from the futur response. *)
+  (** [rem ~field value] removes a [field] from the future response. *)
 
   val set : field:string -> string -> ('p, 'p, unit) t
   (** [set ~field value] sets the [field] value to the new given [value] into
-      the futur response. If the [field] does not exist, [set] adds it. *)
+      the future response. If the [field] does not exist, [set] adds it. *)
 
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
   (** [add_unless_exists ~field value] adds a new [field] with the given [value]
-      into the futur response only if the given [field] {b does not} exists yet.
+      into the future response only if the given [field] {b does not} exists yet.
   *)
 
   val return : 'a -> ('p, 'p, 'a) t
