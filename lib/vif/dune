@@ -60,7 +60,7 @@
   cmdliner
   conan-database.light
   conan-unix
-  mirage-crypto-rng-miou-unix
+  mirage-crypto-rng.unix
   httpcats))
 
 (library
