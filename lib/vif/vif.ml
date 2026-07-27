@@ -453,16 +453,7 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
     | _ as inet -> (None, Httpcats.Server.Bind inet)
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
-  let devices =
-    if cfg.Vif_config_unix.with_rng then
-      let rng =
-        let finally = Mirage_crypto_rng_miou_unix.kill in
-        Device.v ~name:"mirage-crypto" ~finally Device.[] @@ fun _ ->
-        Mirage_crypto_rng_miou_unix.(initialize (module Pfortuna))
-      in
-      Devices.(rng :: devices)
-    else devices
-  in
+  if cfg.Vif_config_unix.with_rng then Mirage_crypto_rng_unix.use_default ();
   Logs.debug (fun m -> m "devices launched");
   let server =
     {
