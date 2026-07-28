@@ -1,12 +1,12 @@
   $ export MIOU_DOMAINS=2
   $ export PORT=9457
   $ vif --pid-file vif.pid examples/01-hello/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
   $ hurl http://localhost:$PORT/ -p=b
   Hello World!
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/02-counter/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
   $ hurl http://localhost:$PORT/ > /dev/null
   $ hurl http://localhost:$PORT/ > /dev/null
   $ hurl http://localhost:$PORT/ > /dev/null
@@ -15,13 +15,13 @@
   5 request(s)
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/05-json/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
   $ hurl -m POST http://localhost:$PORT/ -p=b username=dinosaure password=foo age:=42
   username: dinosaure, password: foo, age: Some 42, address: None
 
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/07-deflate/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
   $ hurl http://localhost:$PORT/deflate Accept-Encoding:deflate -p=h
   transfer-encoding: chunked
   content-type: text/plain; charset=utf-8
@@ -32,7 +32,7 @@
   content-encoding: gzip
   $ kill -INT $(cat vif.pid)
   $ vif --pid-file vif.pid examples/10-route/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
   $ hurl http://localhost:$PORT/echo/dinosaure -p=b
   Hello, "dinosaure"!
   $ hurl http://localhost:$PORT/echo/foo -p=b
@@ -42,7 +42,7 @@
   $ kill -INT $(cat vif.pid)
   $ cd examples/12-static/
   $ vif --pid-file vif.pid main.ml -p $PORT &
-  $ ./../../waitfile.exe vif.pid
+  $ ./../../waitport.exe
   $ hurl http://localhost:$PORT/index.html -p=h
   content-length: 127
   content-type: text/plain; charset=utf-8
@@ -50,7 +50,7 @@
   $ cd ../../
 
   $ vif --pid-file vif.pid examples/18-route-conv/main.ml -p $PORT &
-  $ ./waitfile.exe vif.pid
+  $ ./waitport.exe
 This matches the "number" route:
   $ hurl http://localhost:$PORT/42 -p=b
   Hello World! The number is 42!
@@ -63,7 +63,7 @@ raises an exception through `int_of_string`!
 
   $ cd examples/19-regex-method/
   $ vif --pid-file vif.pid main.ml -p $PORT &
-  $ ./../../waitfile.exe vif.pid
+  $ ./../../waitport.exe
   $ hurl http://localhost:$PORT/ --method=GET -p=b greeting==Bob
   Hello GET Bob!
   $ hurl http://localhost:$PORT/ --multipart --method=POST -p=b greeting=Dylan
