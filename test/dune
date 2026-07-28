@@ -3,9 +3,14 @@
  (deps
   %{bin:vif}
   waitfile.exe
+  waitport.exe
   (package vif)
   (source_tree examples)))
 
 (executable
  (name waitfile)
+ (libraries unix))
+
+(executable
+ (name waitport)
  (libraries unix))
