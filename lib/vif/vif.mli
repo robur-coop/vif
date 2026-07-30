@@ -542,6 +542,9 @@ module Request : sig
       requests and should only refer to meta-data (such as
       {{!val:headers_of_request} headers}). *)
 
+  val tags : ('c, 'a) t -> Logs.Tag.set
+  (** [tags req] is a set of tags useful for logging request-specific messages. *)
+
   type request
   (** Type of a request (in the view of a middleware). *)
 
