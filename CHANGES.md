@@ -1,3 +1,25 @@
+### v0.0.1~beta4 (2026-07-31)
+
+- Handle `Host` fields and be able to dispatch requests with our `Vif.Uri` DSL
+  (spotted by @theAlexes, fixed by @dinosaure, [!63][63], [#35][g35])
+- Update to `caqti.3.0.0` (@dinosaure, [!64][64])
+- Add statistics (@hannesm, @dinosaure, @reynir, [!69][69])
+- Fix & improve documentation (@hannesm, @mneumann, [#37][g37], [!68][68])
+- Use `mirage-crytpo-rng.unix` instead of `mirage-crypto-rng-miou-unix`
+  (@dinosaure, @hannesm, [!71][71])
+- Use `waitport` instead of `waitfile` (@dinosaure, [!72][72])
+- Export `Vif.Request.tags` to get tags from a request (@reynir, [!66][66])
+
+[63]: https://git.robur.coop/robur/vif/pulls/63
+[64]: https://git.robur.coop/robur/vif/pulls/64
+[69]: https://git.robur.coop/robur/vif/pulls/69
+[68]: https://git.robur.coop/robur/vif/pulls/68
+[71]: https://git.robur.coop/robur/vif/pulls/71
+[72]: https://git.robur.coop/robur/vif/pulls/72
+[66]: https://git.robur.coop/robur/vif/pulls/66
+[g35]: https://github.com/robur-coop/vif/issues/35
+[g37]: https://github.com/robur-coop/vif/pull/37
+
 ### v0.0.1~beta3 (2026-05-06)
 
 - Delete `mirage-crypto-rng-miou-unix` dependency for `vif.core`\
