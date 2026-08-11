@@ -25,7 +25,6 @@
  (libraries
   multipart_form
   multipart_form-miou
-  uri
   flux
   fluxt.gz
   fluxt.zl

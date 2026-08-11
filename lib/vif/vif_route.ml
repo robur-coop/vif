@@ -132,7 +132,7 @@ let rec re_path : type e r f.
   let open Re in
   fun i -> function
     | Host str ->
-        let re = Re.str (Uri.pct_encode ~component:`Host str) in
+        let re = Re.str (Pct.encode_host str) in
         (true, i, Start, [ re ])
     | Rel ->
         (* NOTE(dinosaure): a relative route must match {i regardless} of the
@@ -282,20 +282,41 @@ let extract_url : type r f.
   let k = extract_path ~original wp subs k in
   k fn
 
+let extract_path_and_query req =
+  if String.length req > 0 then
+    if String.get req 0 = '/' then
+      match String.index_opt req '?' with
+      | None -> Some (req, None)
+      | Some n ->
+        let query = String.sub req (n + 1) (String.length req - n - 1) in
+        Some (String.sub req 0 n, Some query)
+    else None
+  else None
+
 let prepare_target ?host target =
   let target =
-    match String.index_opt target '?' with
-    | None -> target
-    | Some _ ->
-        let uri = Uri.of_string target in
-        uri
-        |> Uri.query
-        |> sort_query
-        |> Uri.with_query uri
-        |> Uri.path_and_query
+    match extract_path_and_query target with
+    | None -> assert false
+    | Some (path, None) -> path
+    | Some (path, Some query) ->
+      let sorted_query =
+        let query_params = String.split_on_char '&' query in
+        let queries =
+          List.map (fun param ->
+              match String.index_opt param '=' with
+              | None -> assert false
+              | Some idx ->
+                String.sub param 0 idx,
+                String.sub param (idx + 1) (String.length param - idx - 1))
+            query_params
+        in
+        String.concat "&"
+          (List.map (fun (k, v) -> k ^ "=" ^ v) (sort_query queries))
+      in
+      path ^ "?" ^ sorted_query
   in
   match host with
-  | Some host -> Uri.pct_encode ~component:`Host host ^ target
+  | Some host -> Pct.encode_host host ^ target
   | None -> target
 
 let extract url =
@@ -303,7 +324,7 @@ let extract url =
   let re = Re.(compile @@ whole_string re) in
   fun ~fn ?host uri ->
     let host = if with_host then host else None in
-    let str = prepare_target ?host (Uri.path_and_query uri) in
+    let str = prepare_target ?host uri in
     let subs = Re.exec re str in
     extract_url ~original:str re_url subs fn
 
