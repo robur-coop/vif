@@ -245,7 +245,10 @@ let response server ?headers:(hdrs = []) status req0 =
         body
       in
       let full _ = false in
-      let stop = H2.Body.Writer.close in
+      let stop body =
+        Log.debug (fun m -> m ~tags "<- close the response body");
+        H2.Body.Writer.close
+      in
       (Sink { init; push; full; stop } : (string, unit) Flux.sink)
 
 let upgrade ?headers:(hdrs = []) req0 =
