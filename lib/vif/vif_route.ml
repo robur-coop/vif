@@ -426,9 +426,11 @@ let dispatch : type s r c.
   let info = build_info l in
   fun ~meth ~request:e ?host target ->
     let str = prepare_target ?host target in
+    let without_host = prepare_target ?host:None target in
     match match_ info meth str with
-    | None -> default (Option.get (e.extract None Any)) str
+    | None -> default (Option.get (e.extract None Any)) without_host
     | Some (subs, wl) ->
         begin try find_and_trigger ~original:str e subs wl
-        with Not_found -> default (Option.get (e.extract None Any)) str
+        with Not_found ->
+          default (Option.get (e.extract None Any)) without_host
         end
