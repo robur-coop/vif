@@ -121,32 +121,32 @@ let static ?(top = pwd) =
         let process =
           match cached_or_etag req abs_path with
           | None ->
-            let* () = Response.with_string req "" in
-            Response.respond `Not_modified
+              let* () = Response.with_string req "" in
+              Response.respond `Not_modified
           | Some etag ->
-            let stat = Unix.stat (Fpath.to_string abs_path) in
-            let mime =
-              match cached_on_server_size stat abs_path cache with
-              | Some _ as value -> value
-              | None ->
-                  let mime = mime_type abs_path in
-                  let fn mime =
-                    let value = { V.mtime= stat.Unix.st_mtime; mime } in
-                    Cache.add abs_path value cache
-                  in
-                  Option.iter fn mime; mime
-            in
-            let src = file (Fpath.to_string abs_path) in
-            let* _ = Response.content_length stat.Unix.st_size in
-            let* () =
-              match mime with
-              | Some mime -> Response.add ~field:"content-type" mime
-              | None -> Response.return ()
-            in
-            let field = "etag" in
-            let* () = Response.add ~field etag in
-            let* () = Response.with_source req src in
-            Response.respond `OK
+              let stat = Unix.stat (Fpath.to_string abs_path) in
+              let mime =
+                match cached_on_server_size stat abs_path cache with
+                | Some _ as value -> value
+                | None ->
+                    let mime = mime_type abs_path in
+                    let fn mime =
+                      let value = { V.mtime= stat.Unix.st_mtime; mime } in
+                      Cache.add abs_path value cache
+                    in
+                    Option.iter fn mime; mime
+              in
+              let src = file (Fpath.to_string abs_path) in
+              let* _ = Response.content_length stat.Unix.st_size in
+              let* () =
+                match mime with
+                | Some mime -> Response.add ~field:"content-type" mime
+                | None -> Response.return ()
+              in
+              let field = "etag" in
+              let* () = Response.add ~field etag in
+              let* () = Response.with_source req src in
+              Response.respond `OK
         in
         Some process
       end

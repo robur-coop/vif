@@ -97,22 +97,22 @@ module Response = struct
     then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
     match Vif_handler_unix.cached_or_etag ?etag req path with
     | None ->
-      let* () = with_string req "" in
-      respond `Not_modified
+        let* () = with_string req "" in
+        respond `Not_modified
     | Some etag ->
-      let mime = Option.value ~default:(mime_type path) mime in
-      let src = Vif_handler_unix.file (Fpath.to_string path) in
-      let* _ = Vif_core.Response.connection_close req in
-      let field = "content-type" in
-      let* () = add ~field mime in
-      let stat = Unix.stat (Fpath.to_string path) in
-      let* _ = Vif_core.Response.content_length stat.Unix.st_size in
-      let none = return false in
-      let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
-      let field = "etag" in
-      let* () = add ~field etag in
-      let* () = with_source req src in
-      respond `OK
+        let mime = Option.value ~default:(mime_type path) mime in
+        let src = Vif_handler_unix.file (Fpath.to_string path) in
+        let* _ = Vif_core.Response.connection_close req in
+        let field = "content-type" in
+        let* () = add ~field mime in
+        let stat = Unix.stat (Fpath.to_string path) in
+        let* _ = Vif_core.Response.content_length stat.Unix.st_size in
+        let none = return false in
+        let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
+        let field = "etag" in
+        let* () = add ~field etag in
+        let* () = with_source req src in
+        respond `OK
 
   type nonrec empty = empty = Empty
   type nonrec filled = filled = Filled

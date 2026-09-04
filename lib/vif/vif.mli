@@ -543,7 +543,8 @@ module Request : sig
       {{!val:headers_of_request} headers}). *)
 
   val tags : ('c, 'a) t -> Logs.Tag.set
-  (** [tags req] is a set of tags useful for logging request-specific messages. *)
+  (** [tags req] is a set of tags useful for logging request-specific messages.
+  *)
 
   type request
   (** Type of a request (in the view of a middleware). *)
@@ -779,8 +780,9 @@ module Server : sig
   (** [device w t] returns the device specified by the [w] parameter and the
       server [t].
 
-      @raise Not_found if the given device was not initialized via the
-       {!val:Vif.run} function. *)
+      @raise Not_found
+        if the given device was not initialized via the {!val:Vif.run} function.
+  *)
 end
 
 module Middlewares : sig
@@ -1028,8 +1030,8 @@ module Response : sig
 
   val add_unless_exists : field:string -> string -> ('p, 'p, bool) t
   (** [add_unless_exists ~field value] adds a new [field] with the given [value]
-      into the future response only if the given [field] {b does not} exists yet.
-  *)
+      into the future response only if the given [field] {b does not} exists
+      yet. *)
 
   val return : 'a -> ('p, 'p, 'a) t
   (** [return v] fullfills the construction with a value but it {b does not}
