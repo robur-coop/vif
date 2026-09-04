@@ -50,10 +50,29 @@ let to_reader (Flux.Source { init; pull; _ }) =
   in
   Bytesrw.Bytes.Reader.make fn
 
+let is_empty req =
+  let hdrs = headers req in
+  let content_length =
+    Vif_headers.get hdrs "Content-Length"
+    |> Option.map String.trim
+    |> Option.map String.lowercase_ascii
+  in
+  let transfer_encoding =
+    Vif_headers.get hdrs "Transfer-Encoding"
+    |> Option.map String.trim
+    |> Option.map String.lowercase_ascii
+  in
+  match (content_length, transfer_encoding) with
+  | Some "0", _ -> true
+  | Some _, _ | None, Some _ -> false
+  | None, None -> true
+
 let of_json : type a.
     ('socket, Vif_type.json, a) t -> (a, [> `Msg of string ]) result = function
-  | { encoding= Any; _ } as req -> Ok (to_string req)
-  | { encoding= Json_encoding encoding; _ } as req -> begin
+  | { encoding= Type Any; _ } as req -> Ok (to_string req)
+  | { encoding= Type (Option Any); _ } as req ->
+      if is_empty req then Ok None else Ok (Some (to_string req))
+  | { encoding= Type (Json_encoding encoding); _ } as req -> begin
       let from = source req in
       let reader = to_reader from in
       match Jsont_bytesrw.decode encoding reader with
@@ -65,6 +84,21 @@ let of_json : type a.
           Bytesrw.Bytes.Reader.discard reader;
           Error (`Msg msg)
       | Ok _ as value -> value
+    end
+  | { encoding= Type (Option (Json_encoding _)); _ } as req when is_empty req ->
+      Ok None
+  | { encoding= Type (Option (Json_encoding encoding)); _ } as req -> begin
+      let from = source req in
+      let reader = to_reader from in
+      match Jsont_bytesrw.decode encoding reader with
+      | exception exn ->
+          Bytesrw.Bytes.Reader.discard reader;
+          error_msgf "Unexpected exception when decoding JSON: %s"
+            (Printexc.to_string exn)
+      | Error msg ->
+          Bytesrw.Bytes.Reader.discard reader;
+          Error (`Msg msg)
+      | Ok value -> Ok (Some value)
     end
 
 let get : type v.

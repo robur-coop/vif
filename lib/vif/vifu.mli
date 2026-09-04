@@ -158,6 +158,11 @@ module Route : sig
     -> ('e, 'x, 'r) Uri.t
     -> (('c, 'a) Request.t -> 'x, 'r) route
 
+  val query :
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a option) Request.t -> 'x, 'r) route
+
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
 end
 

@@ -18,7 +18,7 @@ let default req server _cfg =
   Vif.Response.respond `OK
 ;;
 
-let query req foo _server _cfg =
+let fnquery req foo _server _cfg =
   let open Vif.Response.Syntax in
   match Vif.Queries.get req "foo" with
   | [] ->
@@ -39,7 +39,7 @@ let routes =
   let open Vif.Uri in
   let open Vif.Route in
   [ get (rel / "echo" /% string `Path /?? nil) --> hello
-  ; get (rel / "query" /?? ("foo", int) ** any) --> query
+  ; get (rel / "query" /?? ("foo", int) ** any) --> fnquery
   ; get (rel /?? nil) --> default ]
 ;;
 

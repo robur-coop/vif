@@ -613,6 +613,11 @@ module Route : sig
   (** [put ty uri] describes a route which matches a [PUT] request with a
       certain [Content-Type] described by [ty] and with the given path [uri]. *)
 
+  val query :
+       ('c, 'a) Type.t
+    -> ('e, 'x, 'r) Uri.t
+    -> (('c, 'a option) Request.t -> 'x, 'r) route
+
   val ( --> ) : ('f, 'r) route -> 'f -> 'r t
   (** [r --> f] associates a route [r] to a handler [f]. *)
 end

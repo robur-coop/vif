@@ -28,12 +28,14 @@ module Route = struct
         * ('e, 'x, 'r) Vif_core.Uri.t
         -> ('f, 'r) route
 
-  let get t = Handler (Request (Some `GET, Null), t)
-  let head t = Handler (Request (Some `HEAD, Null), t)
-  let options t = Handler (Request (Some `OPTIONS, Null), t)
-  let delete t = Handler (Request (Some `DELETE, Null), t)
+  let get t = Handler (Request (Some `GET, Type Null), t)
+  let head t = Handler (Request (Some `HEAD, Type Null), t)
+  let options t = Handler (Request (Some `OPTIONS, Type Null), t)
+  let delete t = Handler (Request (Some `DELETE, Type Null), t)
   let post c t = Handler (Request (Some `POST, c), t)
   let put c t = Handler (Request (Some `PUT, c), t)
+  let query = `Other "QUERY"
+  let query c t = Handler (Request (Some query, Vif_core.Type.option c), t)
   let route (Handler (req, t)) f = Route (req, t, f)
   let ( --> ) = route
 end
