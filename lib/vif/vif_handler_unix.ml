@@ -55,14 +55,18 @@ let mime_type path =
   | Error _ -> None
   | exception _ -> None
 
-let cached_on_client_side ?etag req target =
+(* Returns [None] if we have a cache hit; otherwise returns [Some etag'] where
+   [etag'] is [etag] if present otherwise the sha256 computed etag. *)
+let cached_or_etag ?etag req target =
   let hdrs = Request.headers req in
-  match (Headers.get hdrs "if-none-match", etag) with
-  | Some hash', None ->
-      let hash = sha256sum target in
-      String.equal hash hash'
-  | Some hash', Some hash -> String.equal hash hash'
-  | None, _ -> false
+  let etag =
+    match etag with
+    | Some etag -> etag
+    | None -> Fmt.str {|"%s"|} (sha256sum target)
+  in
+  match Headers.get hdrs "if-none-match" with
+  | Some etag' when String.equal etag etag' -> None
+  | Some _ | None -> Some etag
 
 let valid ~top target =
   Fpath.is_prefix top target
@@ -115,10 +119,11 @@ let static ?(top = pwd) =
     | `GET, Ok abs_path when valid ~top abs_path -> begin
         let ( let* ) = Response.bind in
         let process =
-          if cached_on_client_side req abs_path then
+          match cached_or_etag req abs_path with
+          | None ->
             let* () = Response.with_string req "" in
             Response.respond `Not_modified
-          else
+          | Some etag ->
             let stat = Unix.stat (Fpath.to_string abs_path) in
             let mime =
               match cached_on_server_size stat abs_path cache with
@@ -139,7 +144,7 @@ let static ?(top = pwd) =
               | None -> Response.return ()
             in
             let field = "etag" in
-            let* () = Response.add ~field (sha256sum abs_path) in
+            let* () = Response.add ~field etag in
             let* () = Response.with_source req src in
             Response.respond `OK
         in

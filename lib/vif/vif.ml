@@ -93,10 +93,11 @@ module Response = struct
       Sys.file_exists (Fpath.to_string path) = false
       || Sys.is_directory (Fpath.to_string path)
     then Fmt.invalid_arg "Response.with_file %a" Fpath.pp path;
-    if Vif_handler_unix.cached_on_client_side ?etag req path then
+    match Vif_handler_unix.cached_or_etag ?etag req path with
+    | None ->
       let* () = with_string req "" in
       respond `Not_modified
-    else
+    | Some etag ->
       let mime = Option.value ~default:(mime_type path) mime in
       let src = Vif_handler_unix.file (Fpath.to_string path) in
       let* _ = Vif_core.Response.connection_close req in
@@ -107,11 +108,6 @@ module Response = struct
       let none = return false in
       let* _ = Option.fold ~none ~some:(fun alg -> compression alg req) alg in
       let field = "etag" in
-      let etag =
-        match etag with
-        | None -> Vif_handler_unix.sha256sum path
-        | Some etag -> etag
-      in
       let* () = add ~field etag in
       let* () = with_source req src in
       respond `OK
