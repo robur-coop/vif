@@ -1,3 +1,15 @@
+### v0.0.1~beta5 (2026-09-04)
+
+- Fix `ETag` (@reynir, [!75][75])
+- Fix how we manipulate the target on our handlers (@dinosaure, [!76][76])
+- Upgrade to mhttp.0.0.3 (@dinosaure, [!77][77])
+- Add `Vif{,u}.Route.query` (@dinosaure, [!65][65])
+
+[65]: https://git.robur.coop/robur/vif/pulls/65
+[75]: https://git.robur.coop/robur/vif/pulls/75
+[76]: https://git.robur.coop/robur/vif/pulls/76
+[77]: https://git.robur.coop/robur/vif/pulls/77
+
 ### v0.0.1~beta4 (2026-07-31)
 
 - Handle `Host` fields and be able to dispatch requests with our `Vif.Uri` DSL
