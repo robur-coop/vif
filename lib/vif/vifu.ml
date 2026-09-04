@@ -215,14 +215,15 @@ let rec user's_functions daemon =
   List.iter (dispatch_task daemon) tasks;
   user's_functions daemon
 
-let to_mnet_flow = function
-  | `Tcp flow -> flow
-  | `Tls flow -> Mnet_tls.file_descr flow
-
-let peer socket =
-  let flow = to_mnet_flow socket in
-  let _, (ipaddr, port) = Mnet.TCP.peers flow in
-  Fmt.str "http://%a:%d" Ipaddr.pp ipaddr port
+let peer (flow : Mhttp_server.flow) =
+  match flow with
+  | `Tcp flow ->
+      let _, (ipaddr, port) = Mnet.TCP.peers flow in
+      Fmt.str "http://%a:%d" Ipaddr.pp ipaddr port
+  | `Tls flow ->
+      let flow = Mnet_tls.file_descr flow in
+      let _, (ipaddr, port) = Mnet.TCP.peers flow in
+      Fmt.str "http://%a:%d" Ipaddr.pp ipaddr port
 
 let handler ~default ~middlewares routes daemon =
   ();
@@ -230,7 +231,7 @@ let handler ~default ~middlewares routes daemon =
   let has_middlewares =
     match middlewares with Middlewares.[] -> false | _ -> true
   in
-  fun socket conn reqd ->
+  fun (socket : Mhttp_server.flow) conn reqd ->
     let req0 = Vif_core.Request0.of_reqd ~peer socket conn reqd in
     let env =
       if has_middlewares then begin
@@ -301,11 +302,13 @@ let process cfg server tcpv4 user's_value ready fn =
       assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      Mhttp_server.clear ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
+      let kind = Mnet.TCP.buffer ~limit:None 0x1000 in
+      Mhttp_server.clear ~kind ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
   | None, None ->
+      let kind = Mnet.TCP.buffer ~limit:None 0x1000 in
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Mhttp_server.clear ~ready ~handler:fn ~port:cfg.port tcpv4;
+      Mhttp_server.clear ~kind ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
 
 let default req target _server _user's_value =
