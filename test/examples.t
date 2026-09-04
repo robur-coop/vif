@@ -45,7 +45,7 @@
   $ ./../../waitport.exe
   $ hurl http://localhost:$PORT/index.html -p=h
   transfer-encoding: chunked
-  etag: a127b2e10213e869311e4413f33ef0a8e5c69c2d407ca4056afedbabc695359d
+  etag: "a127b2e10213e869311e4413f33ef0a8e5c69c2d407ca4056afedbabc695359d"
   content-type: text/html
   content-length: 105
   $ kill -INT $(cat vif.pid)
