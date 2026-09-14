@@ -408,11 +408,15 @@ module Config : sig
     -> t
 end
 
+type ic = Mhttp_server.Websocket.ic
+type oc = Mhttp_server.Websocket.oc
+
 val run :
      cfg:Config.t
   -> ?devices:'value Devices.t
   -> ?middlewares:'value Middlewares.t
   -> ?handlers:('c, 'value) Handler.t list
+  -> ?websocket:(ic -> oc -> Server.t -> 'value -> unit)
   -> Mnet.TCP.state
   -> (Server.t -> 'value -> (Response.empty, Response.sent, unit) Response.t)
      Route.t
