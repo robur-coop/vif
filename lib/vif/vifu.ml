@@ -136,6 +136,9 @@ module Config = struct
     { http; tls; cookie_key; port }
 end
 
+type ic = Mhttp_server.Websocket.ic
+type oc = Mhttp_server.Websocket.oc
+
 type 'value daemon = {
     queue: 'value user's_function Queue.t
   ; mutex: Miou.Mutex.t
@@ -149,11 +152,14 @@ and 'value user's_function =
   | User's_request :
       Mhttp_server.flow Vif_core.Request0.t * 'value fn
       -> 'value user's_function
+  | User's_websocket : 'value ws -> 'value user's_function
 
 and 'value fn =
      Vif_core.Server.t
   -> 'value
   -> (Response.empty, Response.sent, unit) Vif_core.Response.t
+
+and 'value ws = Vif_core.Server.t -> 'value -> unit
 
 let to_ctx daemon req0 =
   {
@@ -197,6 +203,9 @@ let dispatch_task daemon = function
           Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
           Vif_core.Request0.report_exn req0 exn
       in
+      ignore (Miou.async ~orphans:daemon.orphans fn)
+  | User's_websocket fn ->
+      let fn () = fn daemon.server daemon.user's_value in
       ignore (Miou.async ~orphans:daemon.orphans fn)
 
 let drain_queue queue =
@@ -273,7 +282,18 @@ let handler ~default ~middlewares routes daemon =
       Log.err (fun m -> m "%s" (Printexc.raw_backtrace_to_string bt));
       raise exn
 
-let process cfg server tcpv4 user's_value ready fn =
+let wshandler daemon fn ?stop flow =
+  let fn ic oc =
+    Miou.Mutex.protect daemon.mutex @@ fun () ->
+    Queue.push (User's_websocket (fn ic oc)) daemon.queue;
+    Miou.Condition.signal daemon.condition
+  in
+  Mhttp_server.Websocket.upgrade ?stop ~fn flow
+
+let limit = Some 0x20000
+(* NOTE(dinosaure): see [Mhttp_client.ml:limit]. *)
+
+let process cfg server tcpv4 user's_value ready (fn, wsfn) =
   let daemon =
     {
       queue= Queue.create ()
@@ -304,13 +324,16 @@ let process cfg server tcpv4 user's_value ready fn =
       assert (Miou.Computation.try_return ready ());
       failwith "Impossible to launch an h2 server without TLS."
   | Some (`Both (config, _) | `HTTP_1_1 config), None ->
-      let kind = Mnet.TCP.buffer ~limit:None 0x1000 in
-      Mhttp_server.clear ~kind ~config ~ready ~handler:fn ~port:cfg.port tcpv4;
+      let kind = Mnet.TCP.buffer ~limit 0x800 in
+      let upgrade flow = wshandler daemon wsfn (`Tcp flow) in
+      Mhttp_server.clear ~upgrade ~kind ~config ~ready ~handler:fn
+        ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
   | None, None ->
-      let kind = Mnet.TCP.buffer ~limit:None 0x1000 in
+      let kind = Mnet.TCP.buffer ~limit 0x800 in
+      let upgrade flow = wshandler daemon wsfn (`Tcp flow) in
       Log.debug (fun m -> m "Start a non-tweaked HTTP/1.1 server");
-      Mhttp_server.clear ~kind ~ready ~handler:fn ~port:cfg.port tcpv4;
+      Mhttp_server.clear ~upgrade ~kind ~ready ~handler:fn ~port:cfg.port tcpv4;
       Miou.cancel user's_tasks
 
 let default req target _server _user's_value =
@@ -346,7 +369,7 @@ let default_from_handlers handlers req target server user's_value =
   | None -> default req target server user's_value
 
 let run ~cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
-    ?(handlers = []) tcpv4 routes user's_value =
+    ?(handlers = []) ?websocket tcpv4 routes user's_value =
   let devices = Devices.run Vif_core.Device.Hmap.empty devices user's_value in
   let server =
     {
@@ -358,7 +381,13 @@ let run ~cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   let default = default_from_handlers handlers in
   let fn0 = handler ~default ~middlewares routes in
   let rd0 = Miou.Computation.create () in
+  let websocket =
+    match websocket with
+    | None -> fun _ oc _ _ -> oc (`Connection_close, String.empty)
+    | Some websocket -> websocket
+  in
   let prm0 =
-    Miou.async @@ fun () -> process cfg server tcpv4 user's_value rd0 fn0
+    Miou.async @@ fun () ->
+    process cfg server tcpv4 user's_value rd0 (fn0, websocket)
   in
   Miou.await_exn prm0
