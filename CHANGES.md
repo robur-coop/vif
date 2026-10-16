@@ -1,3 +1,9 @@
+### v0.0.1~beta6 (2026-10-15)
+
+- Add websocket support for unikernels (@dinosaure, [!79][79])
+
+[79]: https://git.robur.coop/robur/vif/pulls/79
+
 ### v0.0.1~beta5 (2026-09-04)
 
 - Fix `ETag` (@reynir, [!75][75])

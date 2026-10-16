@@ -10,8 +10,8 @@ depends: [
   "ocaml" {>= "5.3.0"}
   "dune" {>= "3.0.0"}
   "vif" {= version}
-  "mhttp" {>= "0.0.3"}
-  "mhttp-server"
+  "mhttp" {>= "0.0.5"}
+  "mhttp-server" {>= "0.0.5"}
   "mirage-crypto-rng-mkernel"
 ]
 conflicts: [ "result" {< "1.5"} ]
@@ -24,8 +24,3 @@ run-test: [
 ]
 synopsis: "A simple web framework for OCaml 5"
 x-ci-accept-failures: ["debian-11"]
-pin-depends: [
-  [ "mhttp-server.dev" "git+https://github.com/robur-coop/mhttp.git#ba4a9ae6a0a569901dcae654658b0d3bfaef786a" ]
-  [ "mhttp-client.dev" "git+https://github.com/robur-coop/mhttp.git#ba4a9ae6a0a569901dcae654658b0d3bfaef786a" ]
-  [ "mhttp.dev" "git+https://github.com/robur-coop/mhttp.git#ba4a9ae6a0a569901dcae654658b0d3bfaef786a" ]
-]
