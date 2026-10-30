@@ -9,6 +9,7 @@ $ cat >main.ml <<EOF
 open Vif ;;
 
 let default req _server () =
+  let open Vif.Response.Syntax in
   let str = "Hello World!\n" in
   let* () = Response.with_string req str in
   Response.respond `OK
@@ -24,7 +25,7 @@ let () = Miou_unix.run @@ fun () ->
   Vif.run routes ()
 ;;
 EOF
-$ vif main.ml --pid vif.pid &
+$ vif main.ml --pid-file=vif.pid &
 [1] 1337
 $ curl http://localhost:8080/
 Hello World!
