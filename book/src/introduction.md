@@ -24,7 +24,7 @@ let () = Miou_unix.run @@ fun () ->
   Vif.run routes ()
 ;;
 EOF
-$ vif main.ml --pid vif.pid &
+$ vif main.ml --pid-file=vif.pid &
 [1] 1337
 $ curl http://localhost:8080/
 Hello World!

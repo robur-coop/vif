@@ -34,7 +34,7 @@ let () =
   Vif.run routes ()
 ;;
 EOF
-$ vif --pid vif.pid main.ml &
+$ vif --pid-file=vif.pid main.ml &
 $ hurl http://localhost:8080/
 HTTP/1.1 200 OK
 
