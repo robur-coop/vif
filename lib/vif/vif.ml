@@ -452,11 +452,18 @@ let run ?cfg ?(devices = Devices.[]) ?(middlewares = Middlewares.[])
   in
   Logs.debug (fun m -> m "Vif.run, interactive:%b" interactive);
   if cfg.Vif_config_unix.with_rng then Mirage_crypto_rng_unix.use_default ();
+  let cookie_key = match cfg.cookie_key, cfg.with_rng with
+    | Some x, _ -> x
+    | None, true ->
+      Mirage_crypto.AES.GCM.of_secret (Mirage_crypto_rng.generate 16)
+    | None, false ->
+      invalid_arg "couldn't initialize cookie key since RNG hasn't been initialized"
+  in
   Logs.debug (fun m -> m "devices launched");
   let server =
     {
       Server.devices= Device.Hmap.empty
-    ; cookie_key= cfg.Vif_config_unix.cookie_key
+    ; cookie_key
     ; metrics= Metrics.empty ()
     }
   in

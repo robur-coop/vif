@@ -8,7 +8,7 @@ type config = {
   ; backlog: int
   ; sockaddr: Unix.sockaddr
   ; pid: Fpath.t option
-  ; cookie_key: Mirage_crypto.AES.GCM.key
+  ; cookie_key: Mirage_crypto.AES.GCM.key option
   ; domains: int
   ; reporter: Logs.reporter option
   ; level: Logs.level option option
@@ -41,10 +41,6 @@ let lint_tls_config http tls =
 let config ?(with_rng = true) ?(domains = default_domains)
     ?cookie_key ?pid ?reporter ?level ?http ?tls
     ?(backlog = 64) sockaddr =
-  let cookie_key = match cookie_key with
-    | None -> Mirage_crypto.AES.GCM.of_secret (Mirage_crypto_rng.generate 16)
-    | Some x -> x
-  in
   let http =
     match http with
     | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
