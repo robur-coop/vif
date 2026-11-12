@@ -183,20 +183,16 @@ let verbosity =
 
 let conv_key =
   let parse s =
-    try Ok (Mirage_crypto.AES.GCM.of_secret s) with
-    | Invalid_argument s -> Error (`Msg ("Couldn't parse cookie key " ^ s))
-  and pp ppf _key =
-    Format.fprintf ppf "KEY"
-  in
+    try Ok (Mirage_crypto.AES.GCM.of_secret s)
+    with Invalid_argument s -> error_msgf "Couldn't parse cookie key %s" s
+  and pp = Fmt.(const string) "KEY" in
   Arg.conv (parse, pp)
 
 let cookie_key =
   let doc = "Private key for encrypting and authenticating cookies." in
   let env = Cmd.Env.info "VIF_COOKIE_KEY" in
   let open Arg in
-  value
-  & opt (some conv_key) None
-  & info [ "cookie-key" ] ~doc ~docv:"KEY" ~env
+  value & opt (some conv_key) None & info [ "cookie-key" ] ~doc ~docv:"KEY" ~env
 
 let setup_config =
   let open Term in
