@@ -8,18 +8,12 @@ type config = {
   ; backlog: int
   ; sockaddr: Unix.sockaddr
   ; pid: Fpath.t option
-  ; cookie_key: Mirage_crypto.AES.GCM.key
+  ; cookie_key: Mirage_crypto.AES.GCM.key option
   ; domains: int
   ; reporter: Logs.reporter option
   ; level: Logs.level option option
   ; with_rng: bool
 }
-
-let really_bad_secret =
-  let open Digestif in
-  let hash = SHA256.digest_string "\xde\xad\xbe\xef" in
-  let hash = SHA256.to_raw_string hash in
-  Mirage_crypto.AES.GCM.of_secret hash
 
 let default_domains = Int.min (Stdlib.Domain.recommended_domain_count ()) 4
 
@@ -45,7 +39,7 @@ let lint_tls_config http tls =
       then alpn_protocols_error "http/1.1 or h2" "[\"http/1.1\"] and [\"h2\"]"
 
 let config ?(with_rng = true) ?(domains = default_domains)
-    ?(cookie_key = really_bad_secret) ?pid ?reporter ?level ?http ?tls
+    ?cookie_key ?pid ?reporter ?level ?http ?tls
     ?(backlog = 64) sockaddr =
   let http =
     match http with

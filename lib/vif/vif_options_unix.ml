@@ -5,18 +5,20 @@ let pid = ref None
 let domains = ref None
 let reporter = ref None
 let level = ref None
+let cookie_key = ref None
 
-let setup_config domains' sockaddr' backlog' pid' reporter' level' =
+let setup_config domains' sockaddr' backlog' pid' reporter' level' cookie_key' =
   sockaddr := sockaddr';
   backlog := backlog';
   pid := pid';
   domains := domains';
   reporter := reporter';
-  level := Some level'
+  level := Some level';
+  cookie_key := cookie_key'
 
 let config_from_globals () =
   Vif_config_unix.config ?reporter:!reporter ?level:!level ?domains:!domains
-    ?pid:!pid ~backlog:!backlog !sockaddr
+    ?cookie_key:!cookie_key ?pid:!pid ~backlog:!backlog !sockaddr
 
 open Cmdliner
 
@@ -179,6 +181,19 @@ let verbosity =
   let env = Cmd.Env.info "VIF_LOGS" in
   Logs_cli.level ~env ~docs:docs_output ()
 
+let conv_key =
+  let parse s =
+    try Ok (Mirage_crypto.AES.GCM.of_secret s)
+    with Invalid_argument s -> error_msgf "Couldn't parse cookie key %s" s
+  and pp = Fmt.(const string) "KEY" in
+  Arg.conv (parse, pp)
+
+let cookie_key =
+  let doc = "Private key for encrypting and authenticating cookies." in
+  let env = Cmd.Env.info "VIF_COOKIE_KEY" in
+  let open Arg in
+  value & opt (some conv_key) None & info [ "cookie-key" ] ~doc ~docv:"KEY" ~env
+
 let setup_config =
   let open Term in
   const setup_config
@@ -188,3 +203,4 @@ let setup_config =
   $ pid
   $ setup_reporter
   $ verbosity
+  $ cookie_key

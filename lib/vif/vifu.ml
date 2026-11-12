@@ -119,13 +119,11 @@ module Config = struct
     ; cookie_key: Mirage_crypto.AES.GCM.key
   }
 
-  let really_bad_secret =
-    let open Digestif in
-    let hash = SHA256.digest_string "\xde\xad\xbe\xef" in
-    let hash = SHA256.to_raw_string hash in
-    Mirage_crypto.AES.GCM.of_secret hash
-
-  let v ?(cookie_key = really_bad_secret) ?http ?tls port =
+  let v ?cookie_key ?http ?tls port =
+    let cookie_key = match cookie_key with
+      | None -> Mirage_crypto.AES.GCM.of_secret (Mirage_crypto_rng.generate 16)
+      | Some x -> x
+    in
     let http =
       match http with
       | Some (`H1 cfg) -> Some (`HTTP_1_1 cfg)
