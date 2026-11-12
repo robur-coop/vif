@@ -41,10 +41,11 @@ let cookie_of_string str =
   | _ -> None
 
 let all_cookies hdrs =
-  let cookies = List.filter (fun (k, _) -> is_cookie k) hdrs in
-  let cookies = List.rev_map snd cookies in
+  let cookies =
+    List.filter_map (fun (k, v) -> if is_cookie k then Some v else None) hdrs
+  in
   let fn1 = cookie_of_string in
-  let fn2 cookie = List.rev_map fn1 (String.split_on_char ';' cookie) in
+  let fn2 cookie = List.map fn1 (String.split_on_char ';' cookie) in
   let cookies = List.concat_map fn2 cookies in
   List.filter_map Fun.id cookies
 
