@@ -360,6 +360,8 @@ module Multipart_form : sig
   val int : int atom
   (** [int] is a representation of the int type. *)
 
+  val conv : 'a atom -> ('a -> 'b) -> 'b atom
+
   type ('a, 'b, 'c) orecord
   (** The type for representing open records of type ['a] with a constructor of
       type ['b]. ['c] represents the remaining fields to be described using the

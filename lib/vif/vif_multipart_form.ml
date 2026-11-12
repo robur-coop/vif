@@ -31,8 +31,14 @@ and ('a, 'b) fields =
   | F1 : 'b field * ('a, 'c) fields -> ('a, 'b -> 'c) fields
 
 and 'a field = { fname: string; ftype: 'a atom }
-and 'a atom = Primary : 'a primary -> 'a atom | Record : 'a t -> 'a atom
+
+and 'a atom =
+  | Primary : 'a primary -> 'a atom
+  | Record : 'a t -> 'a atom
+  | Map : ('a, 'b) map -> 'b atom
+
 and 'a primary = String : string primary | Int : int primary
+and ('a, 'b) map = { x: 'a atom; fn: 'a -> 'b }
 
 type meta = {
     name: string option
@@ -83,6 +89,7 @@ let find_by_name name raw =
 let rec get_value : type a. a atom -> string -> raw -> a = function
   | Primary String -> find_by_name
   | Primary Int -> fun name raw -> int_of_string (find_by_name name raw)
+  | Map m -> fun name raw -> m.fn (get_value m.x name raw)
   | Record r -> fun _ raw -> get_record r raw
 
 and get_record : type a. a t -> raw -> a =
@@ -144,3 +151,4 @@ let sealr : type a b. (a, b, a) orecord -> a t =
 let ( |+ ) = app
 let string = Primary String
 let int = Primary Int
+let conv x fn = Map { x; fn }
