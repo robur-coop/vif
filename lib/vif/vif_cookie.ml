@@ -42,18 +42,11 @@ let cookie_of_string str =
 
 let all_cookies hdrs =
   let cookies = List.filter (fun (k, _) -> is_cookie k) hdrs in
-  let cookies = List.map snd cookies in
-  let cookies =
-    List.fold_left
-      (fun acc c ->
-        let rec get_cookie acc = function
-          | [] -> acc
-          | c1 :: rest -> get_cookie (cookie_of_string c1 :: acc) rest
-        in
-        get_cookie acc (String.split_on_char ';' c))
-      [] cookies
-  in
-  List.filter_map Fun.id (List.rev cookies)
+  let cookies = List.rev_map snd cookies in
+  let fn1 = cookie_of_string in
+  let fn2 cookie = List.rev_map fn1 (String.split_on_char ';' cookie) in
+  let cookies = List.concat_map fn2 cookies in
+  List.filter_map Fun.id cookies
 
 let without_prefix (is_host, is_secure) cookie =
   match (is_host, is_secure) with
